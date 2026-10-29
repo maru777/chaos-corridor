@@ -2,20 +2,90 @@ import * as THREE from 'three';
 import { makeGlowTexture } from './fx';
 
 /**
- * 宇宙の背景（宇宙テーマ）。実写の天の川の全天写真を背景にし、同じ写真を盤の反射にも使う。
- * 写真: ESO/S. Brunier（CC BY 4.0）。4096x2048 に縮小して使用している。描画だけで、ルールとは無関係。
- *
- * 写真だけだと、引き伸ばされてぼやけ、動かない「壁紙」に見える。
- * そこで、くっきりした星の層を上に重ね、写真・星・宇宙塵をそれぞれ違う速さで動かして奥行きを出す。
+ * 宇宙の背景（宇宙テーマ）。コードだけで作る、絵として整えた宇宙。
+ * - 星雲: 起動時に 1 回だけ描いて、立方体の画像（キューブマップ）にして貼る。毎フレームは計算しない。
+ * - 星・宇宙塵・惑星: 写真・星・塵・惑星をそれぞれ違う速さで動かして、奥行きを出す。
+ * 描画だけで、ルールとは無関係。
  */
 
-const PANORAMA_URL = './milkyway.jpg';
+const SKY_SIZE = 1024;
 const DUST_COUNT = 220;
 const DUST_BOX = { x: 14, yMin: -3, yMax: 8, z: 14 };
 const STAR_COUNT = 2600;
 
-// 写真の中心（銀河の中心）が奥に来るよう回し、天の川の帯が奥の空に斜めに立ち上がるよう傾ける
-const SKY_ROTATION = new THREE.Euler(-0.75, Math.PI / 2 + 0.6, 0.1);
+const NOISE_GLSL = /* glsl */ `
+  float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float noise(vec3 x) {
+    vec3 i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z);
+  }
+  float fbm(vec3 p) {
+    float a = 0.5, s = 0.0;
+    for (int i = 0; i < 5; i++) { s += a * noise(p); p = p * 2.02 + vec3(1.7, 9.2, 3.1); a *= 0.5; }
+    return s;
+  }
+`;
+
+// 星雲。明るさには上限を設け、白飛びさせない（以前の銀河は足しすぎて白飛びした）
+const NEBULA_FRAG = /* glsl */ `
+  varying vec3 vDir;
+  ${NOISE_GLSL}
+  void main() {
+    vec3 d = normalize(vDir);
+    vec3 q = d * 2.2;
+    vec3 w = vec3(fbm(q + vec3(0.0, 1.7, 0.3)), fbm(q + vec3(4.2, 0.8, 2.9)), fbm(q + vec3(1.3, 5.1, 7.7)));
+    float n = fbm(q + 1.7 * w);
+    float n2 = fbm(d * 4.6 + w * 2.1 + 9.0);
+    float n3 = fbm(d * 3.0 + w * 1.4 + 21.0);
+
+    vec3 col = vec3(0.004, 0.008, 0.024);
+    col += vec3(0.08, 0.15, 0.55) * smoothstep(0.30, 0.85, n) * 0.55;
+    col += vec3(0.50, 0.12, 0.62) * smoothstep(0.45, 0.90, n2) * smoothstep(0.30, 0.80, n) * 0.7;
+    col += vec3(0.05, 0.50, 0.62) * smoothstep(0.58, 0.95, n3) * 0.32;
+    col *= 1.0 - 0.55 * smoothstep(0.50, 0.80, fbm(d * 7.0 + w * 1.5));
+
+    float glow = pow(max(dot(d, normalize(vec3(0.3, -0.35, -1.0))), 0.0), 5.0);
+    col += vec3(0.35, 0.18, 0.62) * glow * 0.3;
+
+    gl_FragColor = vec4(min(col, vec3(0.85)), 1.0);
+  }
+`;
+
+const PLANET_VERT = /* glsl */ `
+  varying vec3 vWN;
+  varying vec3 vP;
+  varying vec3 vView;
+  void main() {
+    vP = position;
+    vWN = normalize(mat3(modelMatrix) * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vView = -mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const PLANET_FRAG = /* glsl */ `
+  varying vec3 vWN;
+  varying vec3 vP;
+  varying vec3 vView;
+  ${NOISE_GLSL}
+  void main() {
+    vec3 N = normalize(vWN);
+    vec3 V = normalize(vView);
+    vec3 L = normalize(vec3(0.7, 0.45, 0.6));
+    float lit = smoothstep(-0.15, 0.65, dot(N, L));
+    float bands = 0.5 + 0.5 * sin(vP.y * 0.9 + fbm(vP * 0.25) * 5.0);
+    vec3 surf = mix(vec3(0.10, 0.30, 0.52), vec3(0.46, 0.20, 0.58), bands);
+    surf = mix(surf, vec3(0.75, 0.85, 0.95), smoothstep(0.6, 0.9, fbm(vP * 0.4)) * 0.4);
+    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+    vec3 col = surf * (0.06 + 0.95 * lit) + vec3(0.35, 0.65, 1.0) * rim * (0.25 + 0.9 * lit);
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
 
 export interface Space {
   update(timeMs: number): void;
@@ -36,7 +106,7 @@ function buildDust(glow: THREE.Texture): THREE.Points {
   );
 }
 
-/** 写真の上に重ねる、くっきりした星。色と明るさに幅をつける */
+/** くっきりした星。色と明るさに幅をつける */
 function buildStars(glow: THREE.Texture): THREE.Points {
   const pos = new Float32Array(STAR_COUNT * 3);
   const col = new Float32Array(STAR_COUNT * 3);
@@ -63,27 +133,56 @@ function buildStars(glow: THREE.Texture): THREE.Points {
   );
 }
 
+/** 星雲を 1 回だけ描いて、背景と反射に使う画像にする */
+function bakeNebula(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
+  const skyScene = new THREE.Scene();
+  skyScene.add(
+    new THREE.Mesh(
+      new THREE.SphereGeometry(100, 48, 32),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        vertexShader: 'varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: NEBULA_FRAG,
+      }),
+    ),
+  );
+  const target = new THREE.WebGLCubeRenderTarget(SKY_SIZE, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+  new THREE.CubeCamera(0.1, 500, target).update(renderer, skyScene);
+  scene.background = target.texture;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromCubemap(target.texture).texture;
+  pmrem.dispose();
+}
+
+function buildPlanet(glow: THREE.Texture): THREE.Group {
+  const g = new THREE.Group();
+  const radius = 6;
+  const planet = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 64, 48),
+    new THREE.ShaderMaterial({ vertexShader: PLANET_VERT, fragmentShader: PLANET_FRAG }),
+  );
+  const halo = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: glow, color: 0x4a86ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  halo.scale.set(radius * 4.2, radius * 4.2, 1);
+  halo.renderOrder = -1;
+  g.add(halo, planet);
+  g.position.set(-15, -20, -56);
+  return g;
+}
+
 export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Space {
   scene.background = new THREE.Color(0x01020a);
-  scene.backgroundRotation.copy(SKY_ROTATION);
-  scene.environmentRotation.copy(SKY_ROTATION);
-  scene.backgroundIntensity = 1.6;
+  scene.backgroundIntensity = 1.0;
   scene.environmentIntensity = 1.2;
-
-  new THREE.TextureLoader().load(PANORAMA_URL, (tex) => {
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-    scene.background = tex;
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromEquirectangular(tex).texture;
-    pmrem.dispose();
-  });
+  bakeNebula(scene, renderer);
 
   const glow = makeGlowTexture();
   const stars = buildStars(glow);
-  scene.add(stars);
   const dust = buildDust(glow);
-  scene.add(dust);
+  const planet = buildPlanet(glow);
+  scene.add(stars, dust, planet);
   const dustPos = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
   let last = 0;
 
@@ -91,10 +190,11 @@ export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): 
     update(timeMs: number): void {
       const dt = last === 0 ? 0 : Math.min((timeMs - last) / 1000, 0.1);
       last = timeMs;
-      // 写真・星・塵を、違う速さで動かす（奥ほどゆっくり）
-      scene.backgroundRotation.y += dt * 0.004;
-      scene.environmentRotation.y += dt * 0.004;
+      // 星雲・星・塵・惑星を、違う速さで動かす（奥ほどゆっくり）
+      scene.backgroundRotation.y += dt * 0.006;
+      scene.environmentRotation.y += dt * 0.006;
       stars.rotation.y -= dt * 0.012;
+      planet.children[1]!.rotation.y += dt * 0.03;
       for (let i = 0; i < DUST_COUNT; i++) {
         let z = dustPos.getZ(i) - dt * 1.2;
         if (z < -DUST_BOX.z) z += DUST_BOX.z * 2;
