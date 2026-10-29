@@ -2,17 +2,20 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { goalRow } from '../board';
 import type { GameState, Pos, Wall } from '../types';
+import { CINEMA_SHADER, glowMaterial, makeGlowTexture } from './fx';
 import { cellToWorld, wallToWorld, worldToBoard } from './layout';
 import { createSpace } from './space';
 import type { Space } from './space';
 
 const PLAYER_COLORS = [0x38d9ff, 0xff4fb8] as const;
 const WALL_LENGTH = 1.9;
-const WALL_THICK = 0.14;
-const WALL_HEIGHT = 0.55;
+const WALL_THICK = 0.1;
+const WALL_HEIGHT = 0.5;
+const WALL_COLOR = 0xffb04a;
 
 export interface BoardPoint {
   readonly bx: number;
@@ -29,12 +32,24 @@ export class BoardView {
   private readonly plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly wallGroup = new THREE.Group();
   private readonly markerGroup = new THREE.Group();
-  private readonly pawns: THREE.Mesh[] = [];
+  private readonly pawns: THREE.Group[] = [];
+  private readonly pawnRings: THREE.Mesh[] = [];
   private readonly pawnTargets: THREE.Vector3[] = [];
   private readonly space: Space;
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
-  private ghost: THREE.Mesh;
+  private readonly cinema: ShaderPass;
+  private readonly glow = makeGlowTexture();
+  private readonly wallGeo = {
+    h: new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK),
+    v: new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH),
+  };
+  private readonly wallEdgeGeo = {
+    h: new THREE.EdgesGeometry(new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK)),
+    v: new THREE.EdgesGeometry(new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH)),
+  };
+  private readonly wallMats = new Map<number, { shell: THREE.MeshBasicMaterial; edge: THREE.LineBasicMaterial }>();
+  private ghost: THREE.Group;
   private readonly container: HTMLElement;
 
   constructor(container: HTMLElement, size: number) {
@@ -60,31 +75,20 @@ export class BoardView {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.9);
     this.composer.addPass(this.bloom);
+    this.cinema = new ShaderPass(CINEMA_SHADER);
+    this.composer.addPass(this.cinema);
     this.composer.addPass(new OutputPass());
 
     for (let p = 0; p < 2; p++) {
-      const color = PLAYER_COLORS[p] as number;
-      const pawn = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3, 32, 24),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.3 }),
-      );
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.4, 0.04, 12, 40),
-        new THREE.MeshBasicMaterial({ color }),
-      );
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = -0.22;
-      pawn.add(ring);
+      const pawn = this.makePawn(PLAYER_COLORS[p] as number);
       pawn.position.y = 0.34;
       this.pawns.push(pawn);
       this.pawnTargets.push(pawn.position.clone());
       this.scene.add(pawn);
     }
 
-    this.ghost = this.makeWallMesh('h', 0xffffff);
+    this.ghost = this.makeWall('h', WALL_COLOR);
     this.ghost.visible = false;
-    (this.ghost.material as THREE.MeshStandardMaterial).transparent = true;
-    (this.ghost.material as THREE.MeshStandardMaterial).opacity = 0.6;
     this.scene.add(this.ghost);
 
     window.addEventListener('resize', () => this.resize());
@@ -137,39 +141,69 @@ export class BoardView {
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     this.scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x7fb0ff, transparent: true, opacity: 0.8 })));
-    // 縁の光る枠
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0x0a1030, emissive: 0x5a8cff, emissiveIntensity: 1.1, roughness: 0.3, metalness: 0.6 });
-    const edge = this.size + 0.2;
+    // 縁は、細い光の線だけにする（ソリッドな枠にしない）
+    const rimMat = glowMaterial(0x9cc0ff, 0.9);
+    const edge = this.size + 0.06;
     const rims: [number, number, number, number][] = [
-      [edge, 0.12, 0, half + 0.05],
-      [edge, 0.12, 0, -half - 0.05],
-      [0.1, edge, half + 0.05, 0],
-      [0.1, edge, -half - 0.05, 0],
+      [edge, 0.04, 0, half],
+      [edge, 0.04, 0, -half],
+      [0.04, edge, half, 0],
+      [0.04, edge, -half, 0],
     ];
     for (const [w, d, px, pz] of rims) {
-      const rim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), rimMat);
-      rim.position.set(px, -0.04, pz);
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), rimMat);
+      rim.position.set(px, 0, pz);
       this.scene.add(rim);
     }
   }
 
-  private makeWallMesh(o: 'h' | 'v', color: number): THREE.Mesh {
-    const geo = o === 'h' ? new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK) : new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH);
-    return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7, roughness: 0.3 }));
+  /** コマ。ソリッドな球ではなく、光の核・ぼんやりした殻・暈・回る輪で、エネルギー体のように見せる */
+  private makePawn(color: number): THREE.Group {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.12, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.27, 28, 18), glowMaterial(color, 0.22));
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glow, color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    halo.scale.set(1.7, 1.7, 1);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.012, 8, 56), glowMaterial(color, 0.9));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = -0.27;
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.008, 8, 56), glowMaterial(color, 0.35));
+    ring2.rotation.x = Math.PI / 2;
+    ring2.position.y = -0.27;
+    g.add(core, shell, halo, ring, ring2);
+    this.pawnRings.push(ring, ring2);
+    return g;
   }
 
-  private placeWall(mesh: THREE.Mesh, wall: Wall): void {
+  /** 壁。ソリッドな板ではなく、半透明の光の障壁と、明るい縁の線 */
+  private makeWall(o: 'h' | 'v', color: number): THREE.Group {
+    let mats = this.wallMats.get(color);
+    if (!mats) {
+      mats = {
+        shell: glowMaterial(color, 0.26),
+        edge: new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1, toneMapped: false }),
+      };
+      this.wallMats.set(color, mats);
+    }
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(this.wallGeo[o], mats.shell), new THREE.LineSegments(this.wallEdgeGeo[o], mats.edge));
+    return g;
+  }
+
+  private placeWall(obj: THREE.Object3D, wall: Wall): void {
     const w = wallToWorld(this.size, wall.x, wall.y);
-    mesh.position.set(w.x, WALL_HEIGHT / 2, w.z);
+    obj.position.set(w.x, WALL_HEIGHT / 2, w.z);
   }
 
   /** 状態を描き直す。legalMoves は、動けるマスの目印 */
   setState(state: GameState, legalMoves: readonly Pos[]): void {
     this.wallGroup.clear();
     for (const wall of state.walls) {
-      const mesh = this.makeWallMesh(wall.o, 0xffb347);
-      this.placeWall(mesh, wall);
-      this.wallGroup.add(mesh);
+      const obj = this.makeWall(wall.o, WALL_COLOR);
+      this.placeWall(obj, wall);
+      this.wallGroup.add(obj);
     }
     for (let p = 0; p < 2; p++) {
       const pos = state.pawns[p as 0 | 1];
@@ -180,8 +214,8 @@ export class BoardView {
     const color = PLAYER_COLORS[state.turn] as number;
     for (const m of legalMoves) {
       const marker = new THREE.Mesh(
-        new THREE.RingGeometry(0.2, 0.32, 32),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
+        new THREE.RingGeometry(0.22, 0.28, 40),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
       );
       marker.rotation.x = -Math.PI / 2;
       const w = cellToWorld(this.size, m.x, m.y);
@@ -197,12 +231,7 @@ export class BoardView {
       return;
     }
     this.scene.remove(this.ghost);
-    this.ghost.geometry.dispose();
-    (this.ghost.material as THREE.Material).dispose();
-    this.ghost = this.makeWallMesh(wall.o, valid ? 0x4dff9a : 0xff4d4d);
-    const mat = this.ghost.material as THREE.MeshStandardMaterial;
-    mat.transparent = true;
-    mat.opacity = 0.6;
+    this.ghost = this.makeWall(wall.o, valid ? 0x4dff9a : 0xff4d4d);
     this.placeWall(this.ghost, wall);
     this.scene.add(this.ghost);
   }
@@ -235,10 +264,14 @@ export class BoardView {
 
   private frame(time: number): void {
     for (let p = 0; p < 2; p++) {
-      const pawn = this.pawns[p] as THREE.Mesh;
+      const pawn = this.pawns[p] as THREE.Group;
       pawn.position.lerp(this.pawnTargets[p] as THREE.Vector3, 0.2);
       pawn.position.y = 0.34 + Math.sin(time / 500 + p * 2) * 0.04;
     }
+    this.pawnRings.forEach((r, i) => {
+      r.scale.setScalar(1 + Math.sin(time / 400 + i) * 0.06);
+    });
+    this.cinema.uniforms['uTime']!.value = time / 1000;
     const pulse = 1 + Math.sin(time / 250) * 0.12;
     for (const m of this.markerGroup.children) m.scale.setScalar(pulse);
     this.space.update(time);
