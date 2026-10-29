@@ -30,4 +30,8 @@ ARC では、対人対戦で相手と盤面・障害物の位置がずれる、�
 - 公開はローカルで遊べる状態になってから。
 
 ## 環境・ビルド
-- ブラウザ（Three.js、3D）。ビルド方法・バージョンは未決。決まり次第、build / lint / test をここに追記する。
+- ブラウザ（TypeScript、3D 表示は Three.js、ビルドは Vite、テストは Vitest）。Vite と Three.js は、画面を作る段階で追加する。
+- ルール本体: `works/mvp/game/`（ここで実行）
+  - test: `npm test`（Vitest）
+  - typecheck: `npm run typecheck`（tsc）
+  - 初回は `npm install`
