@@ -388,6 +388,9 @@ export class BoardView {
     this.camera.aspect = w / h;
     // 縦長の画面（スマホ）では、盤が横幅いっぱいに収まるようにカメラを引き、真上に近い角度にして押しやすくする
     const portrait = this.camera.aspect < 1;
+    // 縦長では、盤の絵を、画面の上へ 8% ずらす（下の手札のカードが、盤の最後の行に被らないように）
+    if (portrait) this.camera.setViewOffset(w, h, 0, Math.round(h * 0.08), w, h);
+    else this.camera.clearViewOffset();
     const k = Math.max(1, (portrait ? 0.98 : 0.92) / this.camera.aspect);
     // 横長は低めの角度にして、奥に天の川が見えるようにする
     this.basePos.set(0, (portrait ? 10.5 : 7.5) * k, (portrait ? 9.5 : 11.5) * k);

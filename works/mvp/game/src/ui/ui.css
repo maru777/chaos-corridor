@@ -196,3 +196,28 @@
   #opening[data-phase="slam"] .op-title, #opening[data-phase="slam"] .op-stage, #opening[data-phase="slam"] .op-flash, #opening[data-phase="slam"] .op-speed { animation: none !important; }
   #opening[data-phase="slam"] .op-flash { display: none; }
 }
+
+/* ===== 画面の大きさに合わせた配置 ===== */
+/* 小さい画面（スマホ）: カードを小さくして、盤に被らないようにする */
+@media (max-width: 520px) {
+  .acard { width: 92px; min-height: 118px; padding: 5px 4px 7px; }
+  .acard .acard-plate { width: 50px; height: 50px; }
+  .acard .ability-icon { width: 40px; height: 40px; }
+  .acard strong { font-size: 12px; }
+  .acard small { display: none; }
+  .card-back { width: 58px; height: 80px; }
+  .card-back::after { font-size: 22px; }
+  #hand-desc { font-size: 12px; }
+  .pcard { min-width: 0; flex: 1 1 0; }
+}
+/* 背が低い画面: カードをさらに小さく */
+@media (max-height: 700px) {
+  .acard { width: 80px; min-height: 100px; }
+  .acard .acard-plate { width: 42px; height: 42px; }
+  .acard .ability-icon { width: 34px; height: 34px; }
+}
+/* 横長の画面（パソコン）: 手札は、盤の下ではなく、左下に置く（盤の最後の行に被らないように） */
+@media (min-aspect-ratio: 5/4) {
+  #abilities { position: fixed; left: 16px; bottom: 84px; flex-basis: auto; justify-content: flex-start; max-width: 34vw; }
+  #hand-desc { position: fixed; left: 16px; bottom: 60px; flex-basis: auto; text-align: left; max-width: 34vw; }
+}
