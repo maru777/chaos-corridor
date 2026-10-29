@@ -42,22 +42,31 @@
 
       /* カットイン（能力を使ったときの演出）。レア度が高いほど、大きく・長く・派手になる */
       #cutins { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
-      .cutin { position: absolute; inset: 0; overflow: hidden; --c: #38d9ff; --rc: #7fe0a0; --band-h: 86px; --name-size: min(34px, 9vw); }
+      /* --band-h（帯の高さ）は cutin.ts が設定する。--dim は、画面を暗くする濃さ */
+      .cutin { position: absolute; inset: 0; overflow: hidden; --c: #38d9ff; --rc: #7fe0a0; --band-h: 86px; --dim: 0.5; --name-size: min(34px, 9vw); }
       .cutin[data-player="1"] { --c: #ff4fb8; }
-      .cutin.uncommon { --rc: #7fe0a0; }
-      .cutin.rare { --rc: #6aa8ff; --band-h: 124px; --name-size: min(48px, 12vw); }
-      .cutin.epic { --rc: #c58cff; --band-h: 180px; --name-size: min(68px, 16vw); }
-      .cutin.legendary { --rc: #ffd46a; --band-h: 240px; --name-size: min(92px, 20vw); }
+      .cutin.uncommon { --rc: #7fe0a0; --dim: 0.5; }
+      .cutin.rare { --rc: #6aa8ff; --dim: 0.6; --name-size: min(48px, 12vw); }
+      .cutin.epic { --rc: #c58cff; --dim: 0.8; --name-size: min(68px, 16vw); }
+      .cutin.legendary { --rc: #ffd46a; --dim: 0.92; --name-size: min(92px, 20vw); }
 
+      /* 帯は、画面の左右いっぱいに広げる（端が斜めの線に見えないように、傾けない） */
       .cutin-band { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; animation: cutin-slide var(--dur) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-      .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; transform: skewX(-12deg); border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
-        background: linear-gradient(90deg, transparent 0, color-mix(in srgb, var(--c) 55%, #05081a) 14%, color-mix(in srgb, var(--c) 35%, #05081a) 86%, transparent 100%); }
+      .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
+        background: linear-gradient(90deg, color-mix(in srgb, var(--c) 28%, #05081a), color-mix(in srgb, var(--c) 52%, #05081a) 50%, color-mix(in srgb, var(--c) 28%, #05081a)); }
       .cutin-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.35em; color: var(--rc); text-shadow: 0 0 8px var(--rc); }
       .cutin-name { font-size: var(--name-size); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 14px var(--c), 0 0 32px var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
       .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
 
-      .cutin-dim { position: absolute; inset: 0; display: none; background: radial-gradient(circle, rgba(0, 0, 12, 0.35), rgba(0, 0, 12, 0.82)); }
-      .cutin.epic .cutin-dim, .cutin.legendary .cutin-dim { display: block; animation: cutin-fade var(--dur) ease both; }
+      .cutin-dim { position: absolute; inset: 0; background: radial-gradient(circle, rgba(0, 0, 12, 0.45), rgba(0, 0, 12, 0.9)); animation: cutin-dim var(--dur) ease both; }
+
+      /* 電気（稲妻）。太い光の線と、細い白い芯。cutin.ts が、形とタイミングを決めて並べる */
+      .cutin-bolts { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .bolt { opacity: 0; animation: cutin-bolt var(--bd) linear var(--bdelay) both; }
+      .bolt path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+      .bolt-glow { stroke: var(--c); opacity: 0.6; filter: blur(3px); }
+      .bolt-core { stroke: #fff; }
+      .cutin.legendary .bolt-glow, .cutin.epic .bolt-glow { stroke: var(--rc); }
       .cutin-edge { position: absolute; inset: 0; display: none; box-shadow: inset 0 0 90px 10px var(--c); animation: cutin-edge var(--dur) ease both; }
       .cutin.rare .cutin-edge, .cutin.epic .cutin-edge { display: block; }
       .cutin.legendary .cutin-edge { display: block; box-shadow: inset 0 0 150px 34px var(--rc); }
@@ -68,23 +77,39 @@
       .cutin-p:nth-child(3n) { background: #fff; }
       .cutin-p:nth-child(3n + 1) { background: var(--c); }
 
-      @keyframes cutin-slide { 0% { transform: translateX(-105%); opacity: 0; } 14% { transform: translateX(0); opacity: 1; } 80% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(105%); opacity: 0; } }
+      @keyframes cutin-slide { 0% { transform: translateX(-105%); opacity: 0; } 12% { transform: translateX(0); opacity: 1; } 90% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(105%); opacity: 0; } }
       @keyframes cutin-name-pop { from { transform: scale(1.7); opacity: 0; filter: blur(8px); } to { transform: scale(1); opacity: 1; filter: blur(0); } }
-      @keyframes cutin-fade { 0% { opacity: 0; } 12% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes cutin-dim { 0% { opacity: 0; } 10% { opacity: var(--dim); } 92% { opacity: var(--dim); } 100% { opacity: 0; } }
+      @keyframes cutin-fadeio { 0% { opacity: 0; } 12% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
+      /* 稲妻は、2 回ほどちらつきながら光って消える（連続した点滅にはしない） */
+      @keyframes cutin-bolt { 0% { opacity: 0; } 12% { opacity: 1; } 35% { opacity: 0.35; } 55% { opacity: 1; } 100% { opacity: 0; } }
       @keyframes cutin-edge { 0% { opacity: 0; } 25% { opacity: 0.9; } 100% { opacity: 0; } }
       @keyframes cutin-flash { 0% { opacity: 0; } 15% { opacity: var(--flash, 0.5); } 100% { opacity: 0; } }
       @keyframes cutin-burst { 0% { opacity: 1; transform: translate(-50%, -50%) scale(var(--s)); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); } }
 
       /* OS の「視差効果を減らす」設定では、点滅・飛び散り・光の縁をなくし、帯は動かさず出し入れだけにする */
       @media (prefers-reduced-motion: reduce) {
-        .cutin-flash, .cutin-p, .cutin-edge { display: none !important; }
-        .cutin-band { animation-name: cutin-fade; }
+        .cutin-flash, .cutin-p, .cutin-edge, .cutin-bolts { display: none !important; }
+        .cutin-band { animation-name: cutin-fadeio; }
         .cutin-name, .cutin-reading { animation: none; }
-      }    </style>
+      }
+
+      /* デバッグ用（演出を何回でも・どのレア度でも試す）。公開前に外す */
+      #btn-debug { position: fixed; top: 8px; right: 8px; z-index: 30; min-height: 32px; padding: 4px 10px; font-size: 12px; opacity: 0.7; }
+      #debug-panel { position: fixed; top: 46px; right: 8px; z-index: 30; display: flex; flex-direction: column; gap: 6px; padding: 10px; width: min(240px, 70vw); font-size: 13px; }
+      #debug-panel[hidden] { display: none; }
+      #debug-panel .row { display: flex; gap: 6px; flex-wrap: wrap; }
+      #debug-panel button { flex: 1 1 45%; min-height: 36px; padding: 4px 8px; }
+      #debug-panel select { width: 100%; font: inherit; color: var(--ink); background: #0a1030; border: 1px solid rgba(160, 190, 255, 0.35); border-radius: 8px; padding: 6px; }
+      #debug-panel label { display: flex; gap: 6px; align-items: center; }
+      #debug-panel h4 { margin: 0; font-size: 12px; opacity: 0.7; font-weight: 600; }
+    </style>
   </head>
   <body>
     <div id="stage"></div>
     <div id="cutins" aria-hidden="true"></div>
+    <button id="btn-debug" aria-pressed="false">DEBUG</button>
+    <div id="debug-panel" class="panel" hidden></div>
     <div id="top" class="hud">
       <div class="panel"><span id="status" data-turn="0"></span></div>
       <div class="panel" id="msg-panel"><span id="msg"></span></div>

@@ -27,6 +27,12 @@ let orient: Orientation = 'h';
 let ghost: WallSpec | null = null;
 /** カットインの演出中は、操作を受け付けない */
 let busy = false;
+/** 演出の通し番号。デバッグで途中から演出を打ち切って出し直しても、古い演出の後始末が新しい演出を壊さないようにする */
+let effectToken = 0;
+/** デバッグ: 実際の能力でも、この値のレア度の演出を出す（null なら、能力本来のレア度） */
+let rarityOverride: Rarity | null = null;
+/** デバッグ: 能力を使っても、手札から減らさない（何回でも使える） */
+let keepAbilities = false;
 
 const view = new BoardView(el('stage'), state.size);
 const cutinsEl = el('cutins');
@@ -113,12 +119,17 @@ function renderAbilities(): void {
 
 /** カットイン・効果音・3D の演出をまとめて出す。見せ場（impact）で onImpact を呼び、終わると操作を再開する */
 function runEffect(name: string, reading: string, rarity: Rarity, player: PlayerId, onImpact?: () => void): void {
+  const token = ++effectToken;
+  cutinsEl.replaceChildren(); // 演出中に出し直したときは、前の演出を消す
   busy = true;
   const timing = CUTIN_TIMING[rarity];
   playSfx(rarity, timing.impactMs / 1000);
   view.playImpact(rarity, timing.impactMs);
-  window.setTimeout(() => onImpact?.(), timing.impactMs);
+  window.setTimeout(() => {
+    if (token === effectToken) onImpact?.();
+  }, timing.impactMs);
   void playCutIn(cutinsEl, { name, reading, rarity, player }).then(() => {
+    if (token !== effectToken) return;
     busy = false;
     refresh();
   });
@@ -176,16 +187,24 @@ function play(action: Action): void {
     return;
   }
   const mover = state.turn;
-  state = r.state;
-  log = [...log, action];
+  const before = state;
   say('');
   if (mode === 'diagonal' || mode === 'reclaim') mode = 'move';
   if (action.type === 'ability') {
     // 状態は確定済み。盤の見た目は、カットインの見せ場で切り替える
+    if (keepAbilities) {
+      // デバッグ: 手札を減らさず、操作の記録にも入れない（記録の再生で状態がずれないように）
+      state = { ...r.state, abilities: before.abilities };
+    } else {
+      state = r.state;
+      log = [...log, action];
+    }
     const def = abilityDef(action.id);
-    runEffect(def.name, def.reading, def.rarity, mover, refresh);
+    runEffect(def.name, def.reading, rarityOverride ?? def.rarity, mover, refresh);
     return;
   }
+  state = r.state;
+  log = [...log, action];
   refresh();
 }
 
@@ -264,13 +283,60 @@ btnReset.addEventListener('click', () => {
   refresh();
 });
 
-// 演出の確認用: ?debug を付けると、数字キー 1〜4 で、レア度ごとのカットインを試せる（対局には影響しない）
-if (new URLSearchParams(location.search).has('debug')) {
+// デバッグモード: 右上の DEBUG ボタン（または URL に ?debug）で開く。公開前に外す。
+// ・レア度ごとのカットインを、何回でも試せる（演出中でも押し直せる。対局には影響しない）
+// ・実際の能力を使ったときの演出のレア度を、好きなものに変えられる
+// ・能力を使っても減らさないようにできる（何回でも使える）
+function buildDebugPanel(): void {
+  const panel = el('debug-panel');
+  const btn = el<HTMLButtonElement>('btn-debug');
+  const title = (text: string) => {
+    const h = document.createElement('h4');
+    h.textContent = text;
+    return h;
+  };
+
+  const previewRow = document.createElement('div');
+  previewRow.className = 'row';
+  RARITIES.forEach((rarity, i) => {
+    const b = document.createElement('button');
+    b.textContent = `${i + 1} ${rarity}`;
+    b.addEventListener('click', () => runEffect('混沌', 'ケイオス', rarity, state.turn));
+    previewRow.appendChild(b);
+  });
+
+  const select = document.createElement('select');
+  const auto = new Option('能力本来のレア度', '');
+  select.add(auto);
+  for (const r of RARITIES) select.add(new Option(`${r} の演出にする`, r));
+  select.addEventListener('change', () => {
+    rarityOverride = (RARITIES.find((r) => r === select.value) ?? null) as Rarity | null;
+  });
+
+  const label = document.createElement('label');
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.addEventListener('change', () => {
+    keepAbilities = check.checked;
+  });
+  label.append(check, '能力を使っても減らさない');
+
+  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の能力で使うときの演出'), select, label);
+
+  const toggle = (open: boolean) => {
+    panel.hidden = !open;
+    btn.setAttribute('aria-pressed', String(open));
+  };
+  btn.addEventListener('click', () => toggle(Boolean(panel.hidden)));
+  toggle(new URLSearchParams(location.search).has('debug'));
+
   window.addEventListener('keydown', (e) => {
+    if (panel.hidden) return;
     const rarity = RARITIES[Number(e.key) - 1];
-    if (rarity !== undefined && !busy) runEffect('混沌', 'ケイオス', rarity, state.turn);
+    if (rarity !== undefined) runEffect('混沌', 'ケイオス', rarity, state.turn);
   });
 }
+buildDebugPanel();
 
 window.addEventListener('keydown', (e) => {
   if (busy) return;
