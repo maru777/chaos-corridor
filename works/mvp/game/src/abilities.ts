@@ -49,6 +49,20 @@ export const ABILITIES: readonly AbilityDef[] = [
     rarity: 'UNCOMMON',
     text: '相手の次の手番では、壁を置けなくする（手番を使う）',
   },
+  {
+    id: 'leap',
+    name: '蒼穹の跳躍',
+    reading: 'Azure Leap',
+    rarity: 'RARE',
+    text: '壁を越えて、まっすぐ 2 マス先へ跳ぶ（手番を使う）',
+  },
+  {
+    id: 'meteor',
+    name: '災厄の流星',
+    reading: 'Calamity Meteor',
+    rarity: 'RARE',
+    text: '相手の前のマスに隕石を落とし、相手が 3 回動くまで、そのマスを通行不可にする（手番を使う）',
+  },
 ];
 
 export function abilityDef(id: AbilityId): AbilityDef {

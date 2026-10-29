@@ -26,8 +26,12 @@ export function goalRow(size: number, player: 0 | 1): number {
   return player === 0 ? 0 : size - 1;
 }
 
-/** コマを無視して、壁だけでゴール行に着けるか */
-export function hasPathToGoal(size: number, walls: readonly WallSpec[], from: Pos, goalY: number): boolean {
+/**
+ * コマを無視して、壁と通行不可のマス（隕石）を避けて、ゴール行に着けるか。
+ * blockedCells は、通れないマス（始点は含めない）
+ */
+export function hasPathToGoal(size: number, walls: readonly WallSpec[], from: Pos, goalY: number, blockedCells: readonly Pos[] = []): boolean {
+  const blocked = new Set<number>(blockedCells.map((p) => p.y * size + p.x));
   const seen = new Set<number>([from.y * size + from.x]);
   const queue: Pos[] = [from];
   for (let i = 0; i < queue.length; i++) {
@@ -37,7 +41,7 @@ export function hasPathToGoal(size: number, walls: readonly WallSpec[], from: Po
       const next = { x: cur.x + d.x, y: cur.y + d.y };
       if (!inBounds(size, next) || isBlocked(walls, cur, next)) continue;
       const key = next.y * size + next.x;
-      if (seen.has(key)) continue;
+      if (seen.has(key) || blocked.has(key)) continue;
       seen.add(key);
       queue.push(next);
     }
@@ -45,9 +49,15 @@ export function hasPathToGoal(size: number, walls: readonly WallSpec[], from: Po
   return false;
 }
 
-export function bothHavePath(state: Pick<GameState, 'size' | 'pawns'>, walls: readonly WallSpec[]): boolean {
+/** どちらのコマも、ゴールへの道が残っているか。隕石で通れないマス（state.meteors と extraBlocked）も避けて数える */
+export function bothHavePath(
+  state: Pick<GameState, 'size' | 'pawns' | 'meteors'>,
+  walls: readonly WallSpec[],
+  extraBlocked: readonly Pos[] = [],
+): boolean {
+  const blocked = [...state.meteors, ...extraBlocked];
   return (
-    hasPathToGoal(state.size, walls, state.pawns[0], goalRow(state.size, 0)) &&
-    hasPathToGoal(state.size, walls, state.pawns[1], goalRow(state.size, 1))
+    hasPathToGoal(state.size, walls, state.pawns[0], goalRow(state.size, 0), blocked) &&
+    hasPathToGoal(state.size, walls, state.pawns[1], goalRow(state.size, 1), blocked)
   );
 }

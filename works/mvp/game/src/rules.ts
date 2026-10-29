@@ -1,8 +1,10 @@
 import { DIRS, bothHavePath, goalRow, inBounds, isBlocked } from './board';
-import type { AbilityId, Action, ApplyResult, GameState, PlayerId, Pos, Wall, WallSpec } from './types';
+import type { AbilityId, Action, ApplyResult, GameState, Meteor, PlayerId, Pos, Wall, WallSpec } from './types';
 
 export const BOARD_SIZE = 9;
 export const WALLS_PER_PLAYER = 10;
+/** 隕石で通れなくなったマスが、元に戻るまでに、落とされた相手が動く回数 */
+export const METEOR_TURNS = 3;
 
 export function initialState(
   size: number = BOARD_SIZE,
@@ -22,6 +24,7 @@ export function initialState(
     winner: null,
     abilities,
     wallBlocked: [false, false],
+    meteors: [],
   };
 }
 
@@ -37,27 +40,32 @@ function sameWall(a: WallSpec, b: WallSpec): boolean {
   return a.x === b.x && a.y === b.y && a.o === b.o;
 }
 
-/** 手番のコマが動ける先（ジャンプ・斜め越えを含む） */
+/** そのマスが、隕石で通れなくなっているか */
+export function isMeteorAt(state: Pick<GameState, 'meteors'>, p: Pos): boolean {
+  return state.meteors.some((m) => samePos(m, p));
+}
+
+/** 手番のコマが動ける先（ジャンプ・斜め越えを含む。隕石のマスには入れない） */
 export function legalPawnMoves(state: GameState): Pos[] {
   const me = state.pawns[state.turn];
   const foe = state.pawns[otherPlayer(state.turn)];
   const out: Pos[] = [];
   for (const d of DIRS) {
     const n = { x: me.x + d.x, y: me.y + d.y };
-    if (!inBounds(state.size, n) || isBlocked(state.walls, me, n)) continue;
+    if (!inBounds(state.size, n) || isBlocked(state.walls, me, n) || isMeteorAt(state, n)) continue;
     if (!samePos(n, foe)) {
       out.push(n);
       continue;
     }
     const jump = { x: n.x + d.x, y: n.y + d.y };
-    if (inBounds(state.size, jump) && !isBlocked(state.walls, n, jump)) {
+    if (inBounds(state.size, jump) && !isBlocked(state.walls, n, jump) && !isMeteorAt(state, jump)) {
       out.push(jump);
       continue;
     }
     for (const side of DIRS) {
       if (side.x * d.x + side.y * d.y !== 0) continue;
       const diag = { x: n.x + side.x, y: n.y + side.y };
-      if (inBounds(state.size, diag) && !isBlocked(state.walls, n, diag)) out.push(diag);
+      if (inBounds(state.size, diag) && !isBlocked(state.walls, n, diag) && !isMeteorAt(state, diag)) out.push(diag);
     }
   }
   return out;
@@ -65,7 +73,7 @@ export function legalPawnMoves(state: GameState): Pos[] {
 
 /**
  * 斜行（能力）で動ける先。斜めのマスに、壁にふさがれていない道（横→縦、または縦→横）が 1 つでもあればよい。
- * 途中のマスに相手のコマがいる道は通れない。
+ * 途中のマスに相手のコマがいる道や、隕石のマスを通る道は通れない。
  */
 export function legalDiagonalMoves(state: GameState): Pos[] {
   const me = state.pawns[state.turn];
@@ -74,15 +82,50 @@ export function legalDiagonalMoves(state: GameState): Pos[] {
   for (const dx of [-1, 1]) {
     for (const dy of [-1, 1]) {
       const to = { x: me.x + dx, y: me.y + dy };
-      if (!inBounds(state.size, to) || samePos(to, foe)) continue;
+      if (!inBounds(state.size, to) || samePos(to, foe) || isMeteorAt(state, to)) continue;
       const viaX = { x: me.x + dx, y: me.y };
       const viaY = { x: me.x, y: me.y + dy };
-      const routeX = !samePos(viaX, foe) && !isBlocked(state.walls, me, viaX) && !isBlocked(state.walls, viaX, to);
-      const routeY = !samePos(viaY, foe) && !isBlocked(state.walls, me, viaY) && !isBlocked(state.walls, viaY, to);
+      const routeX = !samePos(viaX, foe) && !isMeteorAt(state, viaX) && !isBlocked(state.walls, me, viaX) && !isBlocked(state.walls, viaX, to);
+      const routeY = !samePos(viaY, foe) && !isMeteorAt(state, viaY) && !isBlocked(state.walls, me, viaY) && !isBlocked(state.walls, viaY, to);
       if (routeX || routeY) out.push(to);
     }
   }
   return out;
+}
+
+/**
+ * 跳躍（能力）で動ける先。上下左右のどれかへ、まっすぐ 2 マス先。間にある壁・コマ・隕石は、すべて飛び越える。
+ * 着地するマスに、相手のコマや隕石があってはいけない。
+ */
+export function legalLeapMoves(state: GameState): Pos[] {
+  const me = state.pawns[state.turn];
+  const foe = state.pawns[otherPlayer(state.turn)];
+  const out: Pos[] = [];
+  for (const d of DIRS) {
+    const to = { x: me.x + d.x * 2, y: me.y + d.y * 2 };
+    if (inBounds(state.size, to) && !samePos(to, foe) && !isMeteorAt(state, to)) out.push(to);
+  }
+  return out;
+}
+
+/** 隕石（能力）が落ちる場所: 相手のコマの、ゴールへ向かう側のすぐ前のマス。なければ null（相手がゴール行にいるとき） */
+export function meteorTarget(state: GameState): Pos | null {
+  const foe = otherPlayer(state.turn);
+  const foePos = state.pawns[foe];
+  const dy = Math.sign(goalRow(state.size, foe) - foePos.y);
+  if (dy === 0) return null;
+  const target = { x: foePos.x, y: foePos.y + dy };
+  return inBounds(state.size, target) ? target : null;
+}
+
+/** 隕石を落とせない理由。落とせるなら null。落としたあとも、どちらのコマも、ゴールへの道が残る必要がある */
+export function meteorProblem(state: GameState): string | null {
+  const target = meteorTarget(state);
+  if (target === null) return '落とす場所がない';
+  if (samePos(target, state.pawns[state.turn])) return '自分のコマがいるマスには落とせない';
+  if (isMeteorAt(state, target)) return 'すでに隕石がある';
+  if (!bothHavePath(state, state.walls, [target])) return 'ゴールへの道がなくなる';
+  return null;
 }
 
 /** 壁を置けない理由。置けるなら null */
@@ -126,21 +169,36 @@ export function legalActions(state: GameState): Action[] {
     ...legalWalls(state).map((w): Action => ({ type: 'wall', x: w.x, y: w.y, o: w.o })),
   ];
   for (const id of state.abilities[state.turn]) {
-    if (id === 'diagonal') {
-      for (const to of legalDiagonalMoves(state)) out.push({ type: 'ability', id, to });
-    } else if (id === 'reclaim') {
-      for (const w of reclaimableWalls(state)) out.push({ type: 'ability', id, wall: { x: w.x, y: w.y, o: w.o } });
-    } else if (!state.wallBlocked[otherPlayer(state.turn)]) {
-      out.push({ type: 'ability', id });
+    switch (id) {
+      case 'diagonal':
+        for (const to of legalDiagonalMoves(state)) out.push({ type: 'ability', id, to });
+        break;
+      case 'leap':
+        for (const to of legalLeapMoves(state)) out.push({ type: 'ability', id, to });
+        break;
+      case 'reclaim':
+        for (const w of reclaimableWalls(state)) out.push({ type: 'ability', id, wall: { x: w.x, y: w.y, o: w.o } });
+        break;
+      case 'meteor':
+        if (meteorProblem(state) === null) out.push({ type: 'ability', id });
+        break;
+      case 'jam':
+        if (!state.wallBlocked[otherPlayer(state.turn)]) out.push({ type: 'ability', id });
+        break;
     }
   }
   return out;
 }
 
+/** 落とされた相手（mover）が 1 回動いたので、その人の隕石の残りを 1 減らし、0 になったものを消す */
+function tickMeteors(meteors: readonly Meteor[], mover: PlayerId): Meteor[] {
+  return meteors.map((m) => (m.victim === mover ? { ...m, turnsLeft: m.turnsLeft - 1 } : m)).filter((m) => m.turnsLeft > 0);
+}
+
 /**
  * 元の状態は変えず、新しい状態を返す。反則なら理由を返す。
  * 能力を使うと、その手番を使う（1 手番に 1 つの行動）。1 つの能力は 1 局に 1 回。
- * 手番が終わると、その人にかかっていた電波妨害は解ける。
+ * 手番が終わると、その人にかかっていた電波妨害は解け、その人にかかっていた隕石の残りが 1 減る。
  */
 export function applyAction(state: GameState, action: Action): ApplyResult {
   if (state.winner !== null) return { ok: false, reason: '勝負はついている' };
@@ -149,6 +207,7 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
 
   const wallBlocked: [boolean, boolean] = [state.wallBlocked[0], state.wallBlocked[1]];
   wallBlocked[me] = false;
+  const meteors = tickMeteors(state.meteors, me);
 
   const moveTo = (to: Pos, abilities: GameState['abilities']): ApplyResult => {
     const pawns: [Pos, Pos] = [state.pawns[0], state.pawns[1]];
@@ -156,7 +215,7 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     const won = to.y === goalRow(state.size, me);
     return {
       ok: true,
-      state: { ...state, pawns, abilities, wallBlocked, turn: won ? me : foe, winner: won ? me : null },
+      state: { ...state, pawns, abilities, wallBlocked, meteors, turn: won ? me : foe, winner: won ? me : null },
     };
   };
 
@@ -172,7 +231,7 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     const wallsLeft: [number, number] = [state.wallsLeft[0], state.wallsLeft[1]];
     wallsLeft[me] -= 1;
     const placed: Wall = { ...wall, owner: me };
-    return { ok: true, state: { ...state, walls: [...state.walls, placed], wallsLeft, wallBlocked, turn: foe } };
+    return { ok: true, state: { ...state, walls: [...state.walls, placed], wallsLeft, wallBlocked, meteors, turn: foe } };
   }
 
   // 能力
@@ -188,6 +247,11 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     return moveTo(action.to, abilities);
   }
 
+  if (action.id === 'leap') {
+    if (!legalLeapMoves(state).some((p) => samePos(p, action.to))) return { ok: false, reason: '跳べないマス' };
+    return moveTo(action.to, abilities);
+  }
+
   if (action.id === 'reclaim') {
     const target = reclaimableWalls(state).find((w) => sameWall(w, action.wall));
     if (!target) return { ok: false, reason: '戻せる自分の壁がない' };
@@ -195,12 +259,20 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     wallsLeft[me] += 1;
     return {
       ok: true,
-      state: { ...state, walls: state.walls.filter((w) => w !== target), wallsLeft, abilities, wallBlocked, turn: foe },
+      state: { ...state, walls: state.walls.filter((w) => w !== target), wallsLeft, abilities, wallBlocked, meteors, turn: foe },
     };
+  }
+
+  if (action.id === 'meteor') {
+    const problem = meteorProblem(state);
+    const target = meteorTarget(state);
+    if (problem !== null || target === null) return { ok: false, reason: problem ?? '落とす場所がない' };
+    const fallen: Meteor = { x: target.x, y: target.y, victim: foe, turnsLeft: METEOR_TURNS };
+    return { ok: true, state: { ...state, abilities, wallBlocked, meteors: [...meteors, fallen], turn: foe } };
   }
 
   // jam（電波妨害）
   if (state.wallBlocked[foe]) return { ok: false, reason: '相手はすでに壁を封じられている' };
   wallBlocked[foe] = true;
-  return { ok: true, state: { ...state, abilities, wallBlocked, turn: foe } };
+  return { ok: true, state: { ...state, abilities, wallBlocked, meteors, turn: foe } };
 }

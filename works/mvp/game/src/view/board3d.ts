@@ -19,7 +19,8 @@ const BASE_BLOOM = 0.38;
 const OUTLINE_PAWN = 0.045;
 const OUTLINE_WALL = 0.035;
 
-const PLAYER_COLORS = [0x38d9ff, 0xff4fb8] as const;
+// 先手は黄色、後手は桃色。背景（青・紫）から離れた色にして、コマと自分のゴールを見やすくする
+const PLAYER_COLORS = [0xffc928, 0xff4fb8] as const;
 const WALL_LENGTH = 1.9;
 const WALL_THICK = 0.1;
 const WALL_HEIGHT = 0.5;
@@ -46,6 +47,8 @@ export class BoardView {
   private readonly plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly wallGroup = new THREE.Group();
   private readonly markerGroup = new THREE.Group();
+  private readonly meteorGroup = new THREE.Group();
+  private readonly digitTextures = new Map<number, THREE.Texture>();
   private readonly pawns: THREE.Group[] = [];
   private readonly pawnRings: THREE.Mesh[] = [];
   private readonly pawnTargets: THREE.Vector3[] = [];
@@ -79,7 +82,7 @@ export class BoardView {
     this.scene.add(key);
 
     this.buildBoard();
-    this.scene.add(this.wallGroup, this.markerGroup);
+    this.scene.add(this.wallGroup, this.markerGroup, this.meteorGroup);
 
     // 光る物（壁・コマ・目印）がにじむ
     this.composer = new EffectComposer(this.renderer);
@@ -116,9 +119,9 @@ export class BoardView {
         let emissive = 0x0a1a48;
         let opacity = 0.32;
         if (y === goalRow(this.size, 0)) {
-          color = 0x1a8fb8;
-          emissive = 0x0a6a8a;
-          opacity = 0.55;
+          color = 0xffc21c;
+          emissive = 0x8a4f00;
+          opacity = 0.8; // 黄色は、青い背景に溶けやすいので、少し濃くする
         } else if (y === goalRow(this.size, 1)) {
           color = 0xb8208a;
           emissive = 0x8a0a62;
@@ -222,6 +225,47 @@ export class BoardView {
     return g;
   }
 
+  /** 残りの回数の数字（縁取りつき）の画像。同じ数字は使い回す */
+  private digitTexture(n: number): THREE.Texture {
+    let tex = this.digitTextures.get(n);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 96;
+      const g = c.getContext('2d');
+      if (g) {
+        g.font = '900 78px sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.lineJoin = 'round';
+        g.lineWidth = 14;
+        g.strokeStyle = '#05030f';
+        g.strokeText(String(n), 48, 52);
+        g.fillStyle = '#fff';
+        g.fillText(String(n), 48, 52);
+      }
+      tex = new THREE.CanvasTexture(c);
+      this.digitTextures.set(n, tex);
+    }
+    return tex;
+  }
+
+  /** 隕石（通行不可のマス）。黒縁つきの岩と、赤い暈、残りの回数の数字 */
+  private makeMeteor(turnsLeft: number): THREE.Group {
+    const g = new THREE.Group();
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), new THREE.MeshToonMaterial({ color: 0xff7a3a, gradientMap: this.toon }));
+    rock.add(outlineMesh(new THREE.IcosahedronGeometry(0.34, 0), 0.05));
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glow, color: 0xff4a1a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    halo.scale.set(1.3, 1.3, 1);
+    const digit = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.digitTexture(turnsLeft), transparent: true, depthTest: false }));
+    digit.scale.set(0.5, 0.5, 1);
+    digit.position.y = 0.72;
+    g.add(halo, rock, digit);
+    g.userData['rock'] = rock;
+    return g;
+  }
+
   private placeWall(obj: THREE.Object3D, wall: WallSpec): void {
     const w = wallToWorld(this.size, wall.x, wall.y);
     obj.position.set(w.x, WALL_HEIGHT / 2, w.z);
@@ -239,6 +283,13 @@ export class BoardView {
       const pos = state.pawns[p as 0 | 1];
       const w = cellToWorld(this.size, pos.x, pos.y);
       (this.pawnTargets[p] as THREE.Vector3).set(w.x, 0.34, w.z);
+    }
+    this.meteorGroup.clear();
+    for (const m of state.meteors) {
+      const meteor = this.makeMeteor(m.turnsLeft);
+      const w = cellToWorld(this.size, m.x, m.y);
+      meteor.position.set(w.x, 0.36, w.z);
+      this.meteorGroup.add(meteor);
     }
     this.markerGroup.clear();
     const color = PLAYER_COLORS[state.turn] as number;
@@ -341,6 +392,12 @@ export class BoardView {
     this.cinema.uniforms['uTime']!.value = time / 1000;
     const pulse = 1 + Math.sin(t / 250) * 0.12;
     for (const m of this.markerGroup.children) m.scale.setScalar(pulse);
+    // 隕石は、ゆっくり回って、少し浮き沈みする
+    for (const m of this.meteorGroup.children) {
+      m.position.y = 0.36 + Math.sin(t / 420) * 0.05;
+      const rock = m.userData['rock'] as THREE.Object3D | undefined;
+      if (rock) rock.rotation.y = t / 700;
+    }
 
     // カメラ: ズーム（視野角をせばめる）と揺れ（位置をずらす）
     const fov = BASE_FOV - zoom;

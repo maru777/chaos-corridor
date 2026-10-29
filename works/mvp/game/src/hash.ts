@@ -15,6 +15,10 @@ export function stateHash(state: GameState): string {
     state.winner ?? '-',
     state.abilities.map((list) => [...list].sort().join('+')).join('|'),
     state.wallBlocked.map((b) => (b ? 1 : 0)).join(''),
+    state.meteors
+      .map((m) => `${m.x},${m.y}:${m.victim}:${m.turnsLeft}`)
+      .sort()
+      .join(';'),
   ].join('#');
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {

@@ -1,12 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../src';
 import { POP_TEXT, popLayout } from '../src/view/popsfx';
+import { MOVE_RECIPES, WALL_RECIPES } from '../src/view/sfxrecipes';
 
 describe('ふだんの操作の擬音', () => {
   it('壁は「ドン!」、コマは「タッ!」、勝負がついたら「ドォォォン!!」', () => {
     expect(POP_TEXT.wall).toBe('ドン!');
     expect(POP_TEXT.move).toBe('タッ!');
     expect(POP_TEXT.win).toBe('ドォォォン!!');
+  });
+
+  it('鳴らした効果音の名前を渡すと、その名前に「!」を付けた文字になる。渡さなければ、決まった文字', () => {
+    expect(popLayout('move', 400, 500, 800, 900, createRng(1), 'コツ').text).toBe('コツ!');
+    expect(popLayout('wall', 400, 500, 800, 900, createRng(1), 'ガンッ').text).toBe('ガンッ!');
+    expect(popLayout('wall', 400, 500, 800, 900, createRng(1)).text).toBe(POP_TEXT.wall);
+  });
+
+  it('すべての効果音の名前が、擬音の文字になれる（空でなく、短い）', () => {
+    for (const r of [...MOVE_RECIPES, ...WALL_RECIPES]) {
+      const t = popLayout('move', 400, 500, 800, 900, createRng(1), r.name).text;
+      expect(t.endsWith('!')).toBe(true);
+      expect(t.length).toBeGreaterThan(1);
+      expect(t.length).toBeLessThanOrEqual(6);
+    }
   });
 
   it('壁・コマは、その場所の少し上に出る（本物が隠れない）', () => {

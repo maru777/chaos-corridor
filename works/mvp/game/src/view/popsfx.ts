@@ -32,13 +32,13 @@ export interface PopLayout {
  * 擬音の位置と大きさ。画面からはみ出さないようにそろえる。
  * 壁・コマは、その場所の少し上に出す（本物が隠れないように）。勝負がついたときは、画面の上寄りの中央。
  */
-export function popLayout(kind: PopKind, x: number, y: number, width: number, height: number, rng: () => number): PopLayout {
+export function popLayout(kind: PopKind, x: number, y: number, width: number, height: number, rng: () => number, word?: string): PopLayout {
   const size = Math.max(22, POP_SIZE[kind] * Math.min(1, width / 720));
   const half = (size * BURST_RATIO) / 2;
   const cx = kind === 'win' ? width / 2 : x;
   const cy = kind === 'win' ? height * 0.3 : y - size * 0.9;
   return {
-    text: POP_TEXT[kind],
+    text: word ? `${word}!` : POP_TEXT[kind],
     x: Math.min(width - half, Math.max(half, cx)),
     y: Math.min(height - half, Math.max(half, cy)),
     size,
@@ -49,10 +49,10 @@ export function popLayout(kind: PopKind, x: number, y: number, width: number, he
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** 擬音を出す。color は、爆発の色（使った人の色など） */
-export function showPop(container: HTMLElement, kind: PopKind, x: number, y: number, color: string): void {
+/** 擬音を出す。color は、爆発の色（使った人の色など）。word は、文字（鳴らした効果音の名前。省略すると、種類ごとの決まった文字） */
+export function showPop(container: HTMLElement, kind: PopKind, x: number, y: number, color: string, word?: string): void {
   const rng = createRng(Math.floor(Math.random() * 0xffffffff));
-  const l = popLayout(kind, x, y, window.innerWidth, window.innerHeight, rng);
+  const l = popLayout(kind, x, y, window.innerWidth, window.innerHeight, rng, word);
   const box = document.createElement('div');
   box.className = 'cutin-sfx pop';
   box.style.setProperty('--x', `${l.x.toFixed(1)}px`);

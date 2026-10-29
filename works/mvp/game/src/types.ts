@@ -20,7 +20,13 @@ export interface Wall extends WallSpec {
   readonly owner: PlayerId;
 }
 
-export type AbilityId = 'diagonal' | 'reclaim' | 'jam';
+export type AbilityId = 'diagonal' | 'reclaim' | 'jam' | 'leap' | 'meteor';
+
+/** 隕石が落ちて、通れなくなったマス。victim（落とされた相手）が turnsLeft 回動くと消える */
+export interface Meteor extends Pos {
+  readonly victim: PlayerId;
+  readonly turnsLeft: number;
+}
 
 export interface GameState {
   readonly size: number;
@@ -33,12 +39,16 @@ export interface GameState {
   readonly abilities: readonly [readonly AbilityId[], readonly AbilityId[]];
   /** true の人は、自分の次の手番では壁を置けない（電波妨害）。その手番が終わると解ける */
   readonly wallBlocked: readonly [boolean, boolean];
+  /** 隕石で通れなくなっているマス（どちらのコマも通れない） */
+  readonly meteors: readonly Meteor[];
 }
 
 export type AbilityAction =
   | { readonly type: 'ability'; readonly id: 'diagonal'; readonly to: Pos }
   | { readonly type: 'ability'; readonly id: 'reclaim'; readonly wall: WallSpec }
-  | { readonly type: 'ability'; readonly id: 'jam' };
+  | { readonly type: 'ability'; readonly id: 'jam' }
+  | { readonly type: 'ability'; readonly id: 'leap'; readonly to: Pos }
+  | { readonly type: 'ability'; readonly id: 'meteor' };
 
 export type Action =
   | { readonly type: 'move'; readonly to: Pos }

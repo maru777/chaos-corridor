@@ -109,27 +109,33 @@ function playRecipe(c: AudioContext, out: AudioNode, recipe: SfxRecipe, start: n
   }
 }
 
-function playVariant(kind: 'move' | 'wall', recipes: readonly SfxRecipe[], player: 0 | 1): void {
-  const c = getContext();
-  if (c === null) return;
+/**
+ * 音を 1 つ選んで鳴らし、その音の名前（擬音。例: コツ）を返す。画面の擬音の文字を、鳴った音に合わせるため。
+ * 音が出せない環境でも、選んで名前は返す（文字だけは変わる）。
+ */
+function playVariant(kind: 'move' | 'wall', recipes: readonly SfxRecipe[], player: 0 | 1): string {
   const index = pickVariant(recipes.length, lastVariant[kind], Math.random);
   lastVariant[kind] = index;
   const recipe = recipes[index];
-  if (!recipe) return;
-  const master = c.createGain();
-  master.gain.value = kind === 'wall' ? 0.3 : 0.22;
-  master.connect(c.destination);
-  playRecipe(c, master, recipe, c.currentTime + 0.005, playerPitch(player) * pitchJitter(Math.random));
+  if (!recipe) return '';
+  const c = getContext();
+  if (c !== null) {
+    const master = c.createGain();
+    master.gain.value = kind === 'wall' ? 0.3 : 0.22;
+    master.connect(c.destination);
+    playRecipe(c, master, recipe, c.currentTime + 0.005, playerPitch(player) * pitchJitter(Math.random));
+  }
+  return recipe.name;
 }
 
-/** コマが動く音（軽くて短い）。player は、動かした人 */
-export function playMoveSfx(player: 0 | 1): void {
-  playVariant('move', MOVE_RECIPES, player);
+/** コマが動く音（軽くて短い）。player は、動かした人。鳴らした音の名前を返す */
+export function playMoveSfx(player: 0 | 1): string {
+  return playVariant('move', MOVE_RECIPES, player);
 }
 
-/** 壁を置く音（重くて、衝撃がある）。player は、置いた人 */
-export function playWallSfx(player: 0 | 1): void {
-  playVariant('wall', WALL_RECIPES, player);
+/** 壁を置く音（重くて、衝撃がある）。player は、置いた人。鳴らした音の名前を返す */
+export function playWallSfx(player: 0 | 1): string {
+  return playVariant('wall', WALL_RECIPES, player);
 }
 
 /** 雷が落ちる音: 鋭い破裂（高い帯域のノイズ）→ 重い低音 → 長く尾を引くごろごろ */

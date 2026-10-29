@@ -8,10 +8,15 @@ import {
   initialState,
   legalActions,
   legalDiagonalMoves,
+  legalLeapMoves,
+  legalPawnMoves,
+  meteorProblem,
+  meteorTarget,
   newGame,
   stateHash,
+  wallProblem,
 } from '../src';
-import type { AbilityDef, AbilityId, GameState, Wall } from '../src';
+import type { AbilityDef, AbilityId, Action, GameState, Wall } from '../src';
 
 function W(x: number, y: number, o: 'h' | 'v', owner: 0 | 1 = 0): Wall {
   return { x, y, o, owner };
@@ -60,7 +65,7 @@ describe('ガチャ', () => {
       { id: 'jam', name: '妨害', reading: 'c', rarity: 'LEGENDARY', text: 't' },
     ];
     const rng = createRng(2024);
-    const count = { diagonal: 0, reclaim: 0, jam: 0 };
+    const count: Record<AbilityId, number> = { diagonal: 0, reclaim: 0, jam: 0, leap: 0, meteor: 0 };
     for (let i = 0; i < 6000; i++) count[drawAbilities(rng, 1, pool)[0] as AbilityId]++;
     expect(count.diagonal).toBeGreaterThan(count.reclaim);
     expect(count.reclaim).toBeGreaterThan(count.jam);
@@ -211,6 +216,140 @@ describe('電波妨害（ジャミング）', () => {
     const s = withAbilities(['jam'], []);
     const r = applyAction(s, { type: 'ability', id: 'jam' });
     expect(r.ok && r.state.wallBlocked[0]).toBe(false);
+  });
+});
+
+describe('跳躍（リープ）', () => {
+  it('まっすぐ 2 マス先へ跳べる。上下左右の 4 方向（盤の外へは跳べない）', () => {
+    const center = withAbilities(['leap'], [], { pawns: [{ x: 4, y: 4 }, { x: 0, y: 0 }] });
+    const targets = legalLeapMoves(center);
+    expect(targets).toHaveLength(4);
+    expect(targets).toEqual(expect.arrayContaining([{ x: 4, y: 2 }, { x: 4, y: 6 }, { x: 2, y: 4 }, { x: 6, y: 4 }]));
+    // 下段の中央からは、下へは跳べない（盤の外）。左右と上は跳べる
+    const bottom = withAbilities(['leap'], []);
+    expect(legalLeapMoves(bottom)).toHaveLength(3);
+  });
+
+  it('間の壁・相手のコマ・隕石を飛び越える。着地するマスに、相手や隕石があると跳べない', () => {
+    const wall = withAbilities(['leap'], [], { pawns: [{ x: 4, y: 4 }, { x: 0, y: 0 }], walls: [W(3, 3, 'h', 1), W(4, 3, 'h', 1)] });
+    expect(legalLeapMoves(wall).some((p) => p.x === 4 && p.y === 2)).toBe(true);
+    const foeBetween = withAbilities(['leap'], [], { pawns: [{ x: 4, y: 4 }, { x: 4, y: 3 }] });
+    expect(legalLeapMoves(foeBetween).some((p) => p.x === 4 && p.y === 2)).toBe(true);
+    const foeLanding = withAbilities(['leap'], [], { pawns: [{ x: 4, y: 4 }, { x: 4, y: 2 }] });
+    expect(legalLeapMoves(foeLanding).some((p) => p.x === 4 && p.y === 2)).toBe(false);
+    const meteorLanding = withAbilities(['leap'], [], { pawns: [{ x: 4, y: 4 }, { x: 0, y: 0 }], meteors: [{ x: 4, y: 2, victim: 1, turnsLeft: 2 }] });
+    expect(legalLeapMoves(meteorLanding).some((p) => p.x === 4 && p.y === 2)).toBe(false);
+  });
+
+  it('使うと、跳んだ先に動き、能力が減り、手番が替わる。ゴール行に着けば勝つ', () => {
+    const s = withAbilities(['leap'], []);
+    const r = applyAction(s, { type: 'ability', id: 'leap', to: { x: 4, y: 6 } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.pawns[0]).toEqual({ x: 4, y: 6 });
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    const near = withAbilities(['leap'], [], { pawns: [{ x: 2, y: 2 }, { x: 8, y: 8 }] });
+    const win = applyAction(near, { type: 'ability', id: 'leap', to: { x: 2, y: 0 } });
+    expect(win.ok && win.state.winner).toBe(0);
+  });
+
+  it('持っていない・跳べない場所は、反則', () => {
+    expect(applyAction(initialState(), { type: 'ability', id: 'leap', to: { x: 4, y: 6 } }).ok).toBe(false);
+    const s = withAbilities(['leap'], []);
+    expect(applyAction(s, { type: 'ability', id: 'leap', to: { x: 4, y: 7 } }).ok).toBe(false); // 1 マス先
+    expect(applyAction(s, { type: 'ability', id: 'leap', to: { x: 3, y: 6 } }).ok).toBe(false); // 斜め
+  });
+});
+
+describe('隕石（メテオ）', () => {
+  it('相手の前のマスに落ちる。先手が使えば、後手の前（下）、後手が使えば、先手の前（上）', () => {
+    const first = withAbilities(['meteor'], []);
+    expect(meteorTarget(first)).toEqual({ x: 4, y: 1 });
+    const second = withAbilities([], ['meteor'], { turn: 1 });
+    expect(meteorTarget(second)).toEqual({ x: 4, y: 7 });
+  });
+
+  it('落ちたマスは、どちらのコマも入れない。相手が 3 回動くと消える', () => {
+    const s = withAbilities(['meteor'], []);
+    const r = applyAction(s, { type: 'ability', id: 'meteor' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.meteors).toEqual([{ x: 4, y: 1, victim: 1, turnsLeft: 3 }]);
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    // 後手は、(4,1) へ動けない
+    expect(legalPawnMoves(r.state).some((p) => p.x === 4 && p.y === 1)).toBe(false);
+    expect(applyAction(r.state, { type: 'move', to: { x: 4, y: 1 } }).ok).toBe(false);
+
+    // 後手が動くたびに残りが減り、3 回目で消える（先手の動きでは減らない）
+    let state = r.state;
+    const left: number[] = [];
+    const moves: Action[] = [
+      { type: 'move', to: { x: 3, y: 0 } }, // 後手 1 回目
+      { type: 'move', to: { x: 4, y: 7 } }, // 先手
+      { type: 'move', to: { x: 2, y: 0 } }, // 後手 2 回目
+      { type: 'move', to: { x: 4, y: 6 } }, // 先手
+      { type: 'move', to: { x: 1, y: 0 } }, // 後手 3 回目
+    ];
+    for (const a of moves) {
+      const next = applyAction(state, a);
+      if (!next.ok) throw new Error(next.reason);
+      state = next.state;
+      left.push(state.meteors[0]?.turnsLeft ?? 0);
+    }
+    expect(left).toEqual([2, 2, 1, 1, 0]);
+    expect(state.meteors).toEqual([]);
+  });
+
+  it('隕石のマスには、先手のコマも入れない（落とした本人も）', () => {
+    const state = withAbilities([], [], { pawns: [{ x: 4, y: 2 }, { x: 4, y: 0 }], meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 3 }] });
+    expect(legalPawnMoves(state).some((p) => p.x === 4 && p.y === 1)).toBe(false);
+  });
+
+  it('飛び越えの着地先や、斜めの道に隕石があると、そこへは動けない', () => {
+    // 先手 (4,5)、相手 (4,4)。まっすぐ飛び越えた先 (4,3) が隕石なら、斜め (3,4) と (5,4) へ動ける
+    const s = withAbilities([], [], { pawns: [{ x: 4, y: 5 }, { x: 4, y: 4 }], meteors: [{ x: 4, y: 3, victim: 1, turnsLeft: 2 }] });
+    const moves = legalPawnMoves(s);
+    expect(moves.some((p) => p.x === 4 && p.y === 3)).toBe(false);
+    expect(moves.some((p) => p.x === 3 && p.y === 4)).toBe(true);
+    expect(moves.some((p) => p.x === 5 && p.y === 4)).toBe(true);
+  });
+
+  it('自分のコマがいるマスや、すでに隕石があるマスには落とせない', () => {
+    const mine = withAbilities(['meteor'], [], { pawns: [{ x: 4, y: 1 }, { x: 4, y: 0 }] });
+    expect(meteorProblem(mine)).not.toBeNull();
+    expect(applyAction(mine, { type: 'ability', id: 'meteor' }).ok).toBe(false);
+    const already = withAbilities(['meteor'], [], { meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 2 }] });
+    expect(meteorProblem(already)).not.toBeNull();
+  });
+
+  it('落とすとゴールへの道がなくなるときは、落とせない（使える能力の一覧にも出ない）', () => {
+    // 後手が左上の隅 (0,0)。1 行目の壁で、(0,1) 以外の出口をふさぐ。(0,1) に落とすと、閉じ込める
+    const walls: Wall[] = [W(1, 0, 'h', 0), W(3, 0, 'h', 0), W(5, 0, 'h', 0), W(7, 0, 'h', 0)];
+    const s = withAbilities(['meteor'], [], { pawns: [{ x: 4, y: 8 }, { x: 0, y: 0 }], walls });
+    expect(meteorTarget(s)).toEqual({ x: 0, y: 1 });
+    expect(meteorProblem(s)).toBe('ゴールへの道がなくなる');
+    expect(applyAction(s, { type: 'ability', id: 'meteor' }).ok).toBe(false);
+    expect(legalActions(s).some((a) => a.type === 'ability' && a.id === 'meteor')).toBe(false);
+  });
+
+  it('隕石で通れないマスも、壁を置いたときの「道が残るか」の検査に入る', () => {
+    // 後手が (0,0)。壁で、1〜6 列目の出口をふさいであり、出口は 0 列目（(0,1)）と、7・8 列目だけ。
+    // 7・8 列目をふさぐ壁 (7,0) は、ふだんは置ける（0 列目が残る）。
+    // 0 列目の出口 (0,1) が隕石でふさがれている間は、置くと道がなくなるので、置けない。
+    const walls: Wall[] = [W(1, 0, 'h', 0), W(3, 0, 'h', 0), W(5, 0, 'h', 0)];
+    const pawns: [{ x: number; y: number }, { x: number; y: number }] = [{ x: 4, y: 8 }, { x: 0, y: 0 }];
+    const plain = withAbilities([], [], { pawns, walls });
+    expect(wallProblem(plain, { x: 7, y: 0, o: 'h' })).toBeNull();
+    const withMeteor = withAbilities([], [], { pawns, walls, meteors: [{ x: 0, y: 1, victim: 1, turnsLeft: 2 }] });
+    expect(wallProblem(withMeteor, { x: 7, y: 0, o: 'h' })).toBe('ゴールへの道がなくなる');
+  });
+
+  it('隕石の有無が、ハッシュに出る（ずれを検出できる）', () => {
+    const a = withAbilities([], []);
+    const b = withAbilities([], [], { meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 3 }] });
+    const c = withAbilities([], [], { meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 2 }] });
+    expect(new Set([stateHash(a), stateHash(b), stateHash(c)]).size).toBe(3);
   });
 });
 

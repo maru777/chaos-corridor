@@ -6,7 +6,7 @@
     <title>ケイオスコリドール</title>
     <style>
       :root {
-        --p0: #38d9ff;
+        --p0: #ffc928;
         --p1: #ff4fb8;
         /* アニメ調（試作）: 明るい色の面に、太い黒縁と、ずらした黒い影（ステッカーのような見た目） */
         --ink: #111;
@@ -23,7 +23,7 @@
       #bottom { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
       .panel { background: var(--panel); color: var(--ink); border: 3px solid var(--line); border-radius: 12px; padding: 6px 14px; box-shadow: 4px 4px 0 var(--line); }
       #status { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
-      #status[data-turn="0"] { color: #0a85b8; }
+      #status[data-turn="0"] { color: #b36b00; }
       #status[data-turn="1"] { color: #d0207a; }
       #msg { min-height: 1.4em; font-size: 14px; font-weight: 800; color: #8a4b00; }
       button { font: inherit; font-weight: 800; color: var(--ink); background: #ffd84a; border: 3px solid var(--line); border-radius: 10px; box-shadow: 3px 3px 0 var(--line); padding: 8px 14px; min-height: 44px; cursor: pointer; transition: transform 60ms, box-shadow 60ms; }
@@ -47,7 +47,7 @@
       #cutins { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
       /* --band-h（帯の高さ）は cutin.ts が設定する。--dim は、画面を暗くする濃さ */
       /* 色は、使った人（--pc）ではなく、レア度（--rc。--c は、その色に合わせた全体の色）で変わる。属性: 風=緑、水=青、闇=紫、雷=金 */
-      .cutin { position: absolute; inset: 0; overflow: hidden; --pc: #38d9ff; --rc: #7fe0a0; --c: var(--rc); --band-h: 86px; --dim: 0.5; --chars: 5; --name-size: min(34px, 9vw); }
+      .cutin { position: absolute; inset: 0; overflow: hidden; --pc: #ffc928; --rc: #7fe0a0; --c: var(--rc); --band-h: 86px; --dim: 0.5; --chars: 5; --name-size: min(34px, 9vw); }
       .cutin[data-player="1"] { --pc: #ff4fb8; }
       .cutin.uncommon { --rc: #7fe0a0; --dim: 0.5; }
       .cutin.rare { --rc: #6aa8ff; --dim: 0.6; --name-size: min(48px, 12vw); }

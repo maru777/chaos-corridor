@@ -1,4 +1,16 @@
-import { RARITIES, abilityDef, applyAction, legalDiagonalMoves, legalPawnMoves, newGame, reclaimableWalls, stateHash, wallProblem } from './index';
+import {
+  RARITIES,
+  abilityDef,
+  applyAction,
+  legalActions,
+  legalDiagonalMoves,
+  legalLeapMoves,
+  legalPawnMoves,
+  newGame,
+  reclaimableWalls,
+  stateHash,
+  wallProblem,
+} from './index';
 import type { AbilityId, Action, GameState, Orientation, PlayerId, Rarity, WallSpec } from './index';
 import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
@@ -7,7 +19,7 @@ import { showPop } from './view/popsfx';
 import { playMoveSfx, playSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 
-type Mode = 'move' | 'wall' | 'diagonal' | 'reclaim';
+type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'reclaim';
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -15,13 +27,15 @@ function el<T extends HTMLElement>(id: string): T {
   return e as T;
 }
 
-const NAMES = ['先手（青）', '後手（桃）'] as const;
+const NAMES = ['先手（黄）', '後手（桃）'] as const;
 
 function newSeed(): number {
   return Math.floor(Math.random() * 0xffffffff);
 }
 
-let seed = newSeed();
+// URL に ?seed=数字 を付けると、その種で始まる（同じ手札を再現できる。確認や不具合の再現用）
+const seedParam = Number(new URLSearchParams(location.search).get('seed'));
+let seed = Number.isInteger(seedParam) && seedParam > 0 ? seedParam : newSeed();
 let state: GameState = newGame(seed);
 let log: Action[] = [];
 let mode: Mode = 'move';
@@ -102,6 +116,9 @@ function renderAbilities(): void {
     abilitiesEl.appendChild(none);
     return;
   }
+  // 今の盤で、実際に使える能力（使える行動が 1 つでもあるもの）
+  const usable = new Set<AbilityId>();
+  for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
   for (const id of mine) {
     const def = abilityDef(id);
     const b = document.createElement('button');
@@ -113,7 +130,8 @@ function renderAbilities(): void {
     const reading = document.createElement('small');
     reading.textContent = `《${def.reading}》`;
     b.append(name, reading);
-    if (id === 'jam' && state.wallBlocked[state.turn === 0 ? 1 : 0]) b.disabled = true;
+    // 今は使えない能力（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
+    if (!usable.has(id)) b.disabled = true;
     b.addEventListener('click', () => useAbility(id));
     abilitiesEl.appendChild(b);
   }
@@ -143,8 +161,9 @@ function runEffect(name: string, reading: string, rarity: Rarity, player: Player
 function useAbility(id: AbilityId): void {
   if (busy) return;
   const def = abilityDef(id);
-  if (id === 'jam') {
-    play({ type: 'ability', id: 'jam' });
+  // 場所を選ばない能力は、押したらすぐ使う
+  if (id === 'jam' || id === 'meteor') {
+    play({ type: 'ability', id });
     return;
   }
   mode = mode === id ? 'move' : id;
@@ -160,11 +179,12 @@ function refresh(): void {
   ghost = null;
   view.setGhost(null, false);
   if (state.winner !== null || (mode === 'wall' && state.wallBlocked[state.turn])) mode = mode === 'wall' ? 'move' : mode;
-  if ((mode === 'diagonal' || mode === 'reclaim') && !hasAbility(mode)) mode = 'move';
+  if ((mode === 'diagonal' || mode === 'leap' || mode === 'reclaim') && !hasAbility(mode)) mode = 'move';
   let markers: readonly { x: number; y: number }[] = [];
   if (state.winner === null) {
     if (mode === 'move') markers = legalPawnMoves(state);
     else if (mode === 'diagonal') markers = legalDiagonalMoves(state);
+    else if (mode === 'leap') markers = legalLeapMoves(state);
   }
   view.setState(state, markers);
   if (state.winner !== null) {
@@ -194,7 +214,7 @@ function play(action: Action): void {
   const mover = state.turn;
   const before = state;
   say('');
-  if (mode === 'diagonal' || mode === 'reclaim') mode = 'move';
+  if (mode === 'diagonal' || mode === 'leap' || mode === 'reclaim') mode = 'move';
   if (action.type === 'ability') {
     // 状態は確定済み。盤の見た目は、カットインの見せ場で切り替える
     if (keepAbilities) {
@@ -214,7 +234,7 @@ function play(action: Action): void {
   popFor(action, mover);
 }
 
-const PLAYER_COLOR = ['#38d9ff', '#ff4fb8'] as const;
+const PLAYER_COLOR = ['#ffc928', '#ff4fb8'] as const;
 
 /** 操作に合わせた、漫画の擬音と効果音。壁は「ドン!」、コマは「タッ!」、勝負がついたら「ドォォォン!!」 */
 function popFor(action: Action, mover: PlayerId): void {
@@ -223,13 +243,12 @@ function popFor(action: Action, mover: PlayerId): void {
   if (action.type === 'wall') {
     const w = wallToWorld(state.size, action.x, action.y);
     const p = view.project(w.x, w.z);
-    showPop(pops, 'wall', p.x, p.y, color);
-    playWallSfx(mover);
+    // 鳴らした効果音の名前が、そのまま画面の擬音の文字になる（ドン! ガンッ! カチッ! …）
+    showPop(pops, 'wall', p.x, p.y, color, playWallSfx(mover));
   } else if (action.type === 'move') {
     const w = cellToWorld(state.size, action.to.x, action.to.y);
     const p = view.project(w.x, w.z);
-    showPop(pops, 'move', p.x, p.y, color);
-    playMoveSfx(mover);
+    showPop(pops, 'move', p.x, p.y, color, playMoveSfx(mover));
   }
   if (state.winner !== null) showPop(pops, 'win', 0, 0, '#ffd46a');
 }
@@ -266,12 +285,12 @@ stage.addEventListener('pointerdown', (e) => {
 
 stage.addEventListener('pointerup', (e) => {
   if (busy || state.winner !== null) return;
-  if (mode === 'move' || mode === 'diagonal') {
+  if (mode === 'move' || mode === 'diagonal' || mode === 'leap') {
     const p = view.pick(e.clientX, e.clientY);
     if (p === null) return;
     const cell = nearestCell(state.size, p.bx, p.by);
     if (cell === null) return;
-    play(mode === 'move' ? { type: 'move', to: cell } : { type: 'ability', id: 'diagonal', to: cell });
+    play(mode === 'move' ? { type: 'move', to: cell } : { type: 'ability', id: mode, to: cell });
     return;
   }
   // 壁・回収: マウスは予告が出ているのでそのまま確定。タッチは 1 回目で予告、同じ場所をもう一度押すと確定
