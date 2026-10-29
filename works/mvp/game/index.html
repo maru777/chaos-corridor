@@ -28,7 +28,17 @@
       button[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); border-color: #8fb0ff; }
       button:disabled { opacity: 0.4; cursor: default; }
       #hash { font-size: 11px; opacity: 0.55; }
-      #msg-panel:has(#msg:empty) { display: none; }    </style>
+      #msg-panel:has(#msg:empty) { display: none; }
+      #abilities { flex-basis: 100%; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; pointer-events: none; }
+      #abilities > * { pointer-events: auto; }
+      .ability-none { font-size: 13px; opacity: 0.6; }
+      button.ability { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 8px 14px; border-width: 2px; }
+      button.ability small { font-size: 11px; opacity: 0.8; }
+      button.ability.uncommon { border-color: #7fe0a0; }
+      button.ability.rare { border-color: #6aa8ff; }
+      button.ability.epic { border-color: #c58cff; }
+      button.ability.legendary { border-color: #ffd46a; }
+      button.ability[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); }    </style>
   </head>
   <body>
     <div id="stage"></div>
@@ -37,6 +47,7 @@
       <div class="panel" id="msg-panel"><span id="msg"></span></div>
     </div>
     <div id="bottom" class="hud">
+      <div id="abilities"></div>
       <button id="btn-move" aria-pressed="true">移動</button>
       <button id="btn-wall" aria-pressed="false">壁を置く</button>
       <button id="btn-rotate">壁の向き: 横</button>

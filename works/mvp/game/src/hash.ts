@@ -3,7 +3,7 @@ import type { GameState } from './types';
 /** 壁の順番に依存しない、状態の要約値（対人でずれを検出するために毎ターン比べる） */
 export function stateHash(state: GameState): string {
   const walls = state.walls
-    .map((w) => `${w.o}${w.x},${w.y}`)
+    .map((w) => `${w.o}${w.x},${w.y}:${w.owner}`)
     .sort()
     .join(';');
   const text = [
@@ -13,6 +13,8 @@ export function stateHash(state: GameState): string {
     state.wallsLeft.join(','),
     state.turn,
     state.winner ?? '-',
+    state.abilities.map((list) => [...list].sort().join('+')).join('|'),
+    state.wallBlocked.map((b) => (b ? 1 : 0)).join(''),
   ].join('#');
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {

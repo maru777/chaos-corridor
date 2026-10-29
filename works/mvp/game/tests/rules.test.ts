@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, legalPawnMoves, wallProblem } from '../src';
 import type { GameState, Wall } from '../src';
 
+/** テスト用の壁（先手が置いたことにする） */
+function W(x: number, y: number, o: 'h' | 'v'): Wall {
+  return { x, y, o, owner: 0 };
+}
+
 function withState(patch: Partial<GameState>): GameState {
   return { ...initialState(), ...patch };
 }
@@ -33,9 +38,9 @@ describe('コマの移動', () => {
   });
 
   it('壁でふさがれた方向には動けない', () => {
-    const s = withState({ walls: [{ x: 4, y: 7, o: 'h' }] });
+    const s = withState({ walls: [W(4, 7, 'h')] });
     expect(legalPawnMoves(s).some((p) => p.x === 4 && p.y === 7)).toBe(false);
-    const s2 = withState({ walls: [{ x: 3, y: 7, o: 'h' }] });
+    const s2 = withState({ walls: [W(3, 7, 'h')] });
     expect(legalPawnMoves(s2).some((p) => p.x === 4 && p.y === 7)).toBe(false);
   });
 
@@ -48,7 +53,7 @@ describe('コマの移動', () => {
   it('飛び越える先に壁があれば、斜めに動ける', () => {
     const s = withState({
       pawns: [{ x: 4, y: 5 }, { x: 4, y: 4 }],
-      walls: [{ x: 4, y: 3, o: 'h' }],
+      walls: [W(4, 3, 'h')],
     });
     const moves = legalPawnMoves(s);
     expect(moves.some((p) => p.x === 4 && p.y === 3)).toBe(false);
@@ -81,7 +86,7 @@ describe('壁', () => {
   });
 
   it('重なる・交差する壁、盤の外の壁は置けない', () => {
-    const base = withState({ walls: [{ x: 3, y: 3, o: 'h' }] });
+    const base = withState({ walls: [W(3, 3, 'h')] });
     expect(wallProblem(base, { x: 3, y: 3, o: 'h' })).not.toBeNull();
     expect(wallProblem(base, { x: 4, y: 3, o: 'h' })).not.toBeNull();
     expect(wallProblem(base, { x: 2, y: 3, o: 'h' })).not.toBeNull();
@@ -92,7 +97,7 @@ describe('壁', () => {
   });
 
   it('縦の壁どうしの重なりも見つける', () => {
-    const base = withState({ walls: [{ x: 3, y: 3, o: 'v' }] });
+    const base = withState({ walls: [W(3, 3, 'v')] });
     expect(wallProblem(base, { x: 3, y: 4, o: 'v' })).not.toBeNull();
     expect(wallProblem(base, { x: 3, y: 2, o: 'v' })).not.toBeNull();
     expect(wallProblem(base, { x: 3, y: 5, o: 'v' })).toBeNull();
@@ -105,7 +110,7 @@ describe('壁', () => {
 
   it('ゴールへの道を完全にふさぐ壁は置けない', () => {
     // 後手のコマが左上の隅 (0,0) にいて、足元に横壁がある。右の出口 (1,0)→(2,0) を縦壁でふさぐと閉じ込められる
-    const walls: Wall[] = [{ x: 0, y: 0, o: 'h' }];
+    const walls: Wall[] = [W(0, 0, 'h')];
     const s = withState({ walls, pawns: [{ x: 4, y: 8 }, { x: 0, y: 0 }] });
     expect(wallProblem(s, { x: 1, y: 0, o: 'v' })).toBe('ゴールへの道がなくなる');
     // 出口が残る壁なら置ける

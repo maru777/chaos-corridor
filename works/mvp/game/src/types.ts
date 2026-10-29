@@ -8,11 +8,19 @@ export interface Pos {
 /** 'h': 横向きの壁（上下のマスの間）、'v': 縦向きの壁（左右のマスの間）。x, y は 0..size-2 の交点 */
 export type Orientation = 'h' | 'v';
 
-export interface Wall {
+/** 壁の位置と向き（置く前の指定や、置けるかの判定に使う） */
+export interface WallSpec {
   readonly x: number;
   readonly y: number;
   readonly o: Orientation;
 }
+
+/** 盤に置かれた壁。誰が置いたかを持つ（「回収」で、自分の壁だけを戻せるように） */
+export interface Wall extends WallSpec {
+  readonly owner: PlayerId;
+}
+
+export type AbilityId = 'diagonal' | 'reclaim' | 'jam';
 
 export interface GameState {
   readonly size: number;
@@ -21,11 +29,21 @@ export interface GameState {
   readonly wallsLeft: readonly [number, number];
   readonly turn: PlayerId;
   readonly winner: PlayerId | null;
+  /** それぞれが持っている、まだ使っていない能力（1 つの能力は 1 局に 1 回） */
+  readonly abilities: readonly [readonly AbilityId[], readonly AbilityId[]];
+  /** true の人は、自分の次の手番では壁を置けない（電波妨害）。その手番が終わると解ける */
+  readonly wallBlocked: readonly [boolean, boolean];
 }
+
+export type AbilityAction =
+  | { readonly type: 'ability'; readonly id: 'diagonal'; readonly to: Pos }
+  | { readonly type: 'ability'; readonly id: 'reclaim'; readonly wall: WallSpec }
+  | { readonly type: 'ability'; readonly id: 'jam' };
 
 export type Action =
   | { readonly type: 'move'; readonly to: Pos }
-  | { readonly type: 'wall'; readonly x: number; readonly y: number; readonly o: Orientation };
+  | { readonly type: 'wall'; readonly x: number; readonly y: number; readonly o: Orientation }
+  | AbilityAction;
 
 export type ApplyResult =
   | { readonly ok: true; readonly state: GameState }

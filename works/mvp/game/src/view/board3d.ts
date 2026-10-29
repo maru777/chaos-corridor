@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { goalRow } from '../board';
-import type { GameState, Pos, Wall } from '../types';
+import type { GameState, Pos, WallSpec } from '../types';
 import { CINEMA_SHADER, glowMaterial, makeGlowTexture } from './fx';
 import { cellToWorld, wallToWorld, worldToBoard } from './layout';
 import { createSpace } from './space';
@@ -192,7 +192,7 @@ export class BoardView {
     return g;
   }
 
-  private placeWall(obj: THREE.Object3D, wall: Wall): void {
+  private placeWall(obj: THREE.Object3D, wall: WallSpec): void {
     const w = wallToWorld(this.size, wall.x, wall.y);
     obj.position.set(w.x, WALL_HEIGHT / 2, w.z);
   }
@@ -225,7 +225,7 @@ export class BoardView {
   }
 
   /** 壁の置き場所の予告。null で消す */
-  setGhost(wall: Wall | null, valid: boolean): void {
+  setGhost(wall: WallSpec | null, valid: boolean): void {
     if (wall === null) {
       this.ghost.visible = false;
       return;
