@@ -13,14 +13,19 @@ import {
   stateHash,
   voidTargets,
   wallProblem,
+  WALLS_PER_PLAYER,
 } from './index';
 import type { AbilityId, Action, GameState, Orientation, PlayerId, Pos, Rarity, WallSpec } from './index';
 import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld } from './view/layout';
 import { showPop } from './view/popsfx';
-import { playMoveSfx, playSfx, playWallSfx } from './view/sfx';
+import { playMoveSfx, playSfx, playTitleSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
+import './ui/ui.css';
+import { handCount, visibleCards } from './ui/hand';
+import { abilityIconSvg } from './ui/icons';
+import { createShell } from './ui/shell';
 
 /** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
 type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | 'reclaim' | 'aegis' | 'void';
@@ -51,8 +56,9 @@ function newSeed(): number {
   return Math.floor(Math.random() * 0xffffffff);
 }
 
+const params = new URLSearchParams(location.search);
 // URL に ?seed=数字 を付けると、その種で始まる（同じ手札を再現できる。確認や不具合の再現用）
-const seedParam = Number(new URLSearchParams(location.search).get('seed'));
+const seedParam = Number(params.get('seed'));
 let seed = Number.isInteger(seedParam) && seedParam > 0 ? seedParam : newSeed();
 let state: GameState = newGame(seed);
 let log: Action[] = [];
@@ -63,6 +69,11 @@ let ghost: WallSpec | null = null;
 let novaFirst: Pos | null = null;
 /** 短い壁（三連壁）を置くモードか。短い壁を持っているときだけ切り替えられる */
 let shortMode = false;
+/** 手札を見ているか（手番が替わると、また伏せる）。相手に見せないための決まり */
+let handRevealed = false;
+let lastTurn: PlayerId = 0;
+/** デバッグ: 手札を、全部見えるようにする */
+let debugShowAll = false;
 /** カットインの演出中は、操作を受け付けない */
 let busy = false;
 /** 演出の通し番号。デバッグで途中から演出を打ち切って出し直しても、古い演出の後始末が新しい演出を壊さないようにする */
@@ -78,6 +89,8 @@ const statusEl = el('status');
 const msgEl = el('msg');
 const hashEl = el('hash');
 const abilitiesEl = el('abilities');
+const handDescEl = el('hand-desc');
+const pcardEls = [el('pcard0'), el('pcard1')] as const;
 const btnMove = el<HTMLButtonElement>('btn-move');
 const btnWall = el<HTMLButtonElement>('btn-wall');
 const btnRotate = el<HTMLButtonElement>('btn-rotate');
@@ -146,35 +159,139 @@ function hasAbility(id: AbilityId): boolean {
   return state.abilities[state.turn].includes(id);
 }
 
-function renderAbilities(): void {
+/** レア度の色（CSS の変数名）。結果の表示で使う */
+function rarityClass(id: AbilityId): string {
+  return abilityDef(id).rarity.toLowerCase();
+}
+
+/** 小さなアイコンの札（プレイヤーカード・結果の表示用）。レア度の色の面に、アイコン */
+function miniCard(id: AbilityId): HTMLSpanElement {
+  const s = document.createElement('span');
+  s.className = 'mini-card';
+  s.style.background = `var(--c-${rarityClass(id)})`;
+  s.style.color = '#05030f';
+  s.title = abilityDef(id).name;
+  s.innerHTML = abilityIconSvg(id); // アイコンは、コードで作った SVG（外部の入力ではない）
+  return s;
+}
+
+function div(className: string, text?: string): HTMLDivElement {
+  const d = document.createElement('div');
+  d.className = className;
+  if (text !== undefined) d.textContent = text;
+  return d;
+}
+
+/** 手札。ふだんは伏せて（裏向きで枚数だけ）、手番の人が「手札を見る」を押したときだけ、カードが見える。相手の手札は、枚数だけ */
+function renderHand(): void {
   abilitiesEl.replaceChildren();
-  if (state.winner !== null) return;
-  const mine = state.abilities[state.turn];
-  if (mine.length === 0) {
-    const none = document.createElement('span');
-    none.className = 'ability-none';
-    none.textContent = '使える能力なし';
-    abilitiesEl.appendChild(none);
+  handDescEl.textContent = '';
+  if (state.winner !== null) {
+    // 勝負がついたので、両方の残りの手札を見せる（種明かし）
+    for (const p of [0, 1] as const) {
+      const cards = visibleCards(state, p, false);
+      if (cards === null || cards.length === 0) continue;
+      const row = div('result-hand', `${NAMES[p]}の残りの手札`);
+      for (const id of cards) row.appendChild(miniCard(id));
+      abilitiesEl.appendChild(row);
+    }
     return;
   }
-  // 今の盤で、実際に使える能力（使える行動が 1 つでもあるもの）
+  const count = handCount(state, state.turn);
+  if (count === 0) {
+    abilitiesEl.appendChild(div('hand-hint', '使える能力は、もうない'));
+    return;
+  }
+  const cards = visibleCards(state, state.turn, handRevealed, debugShowAll);
+  if (cards === null) {
+    // 伏せた手札: 裏向きのカードと、見るためのボタン
+    for (let i = 0; i < count; i++) abilitiesEl.appendChild(div('card-back'));
+    const row = div('reveal-row');
+    const reveal = document.createElement('button');
+    reveal.className = 'hand-btn primary';
+    reveal.textContent = '手札を見る';
+    reveal.addEventListener('click', () => {
+      if (busy) return;
+      handRevealed = true;
+      refresh();
+    });
+    row.append(reveal, div('hand-hint', '相手に見えないように'));
+    abilitiesEl.appendChild(row);
+    return;
+  }
+  // 今の盤で、実際に使える技（使える行動が 1 つでもあるもの）
   const usable = new Set<AbilityId>();
   for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
-  for (const id of mine) {
+  for (const id of cards) {
     const def = abilityDef(id);
     const b = document.createElement('button');
-    b.className = `ability ${def.rarity.toLowerCase()}`;
-    b.title = def.text;
+    b.className = `acard ${def.rarity.toLowerCase()}`;
     b.setAttribute('aria-pressed', String(modeAbility(mode) === id));
+    b.setAttribute('aria-label', `${def.name}。${def.text}`);
+    const rar = document.createElement('span');
+    rar.className = 'acard-rar';
+    rar.textContent = def.rarity;
+    const plate = document.createElement('span');
+    plate.className = 'acard-plate';
+    plate.innerHTML = abilityIconSvg(id); // アイコンは、コードで作った SVG（外部の入力ではない）
     const name = document.createElement('strong');
     name.textContent = def.name;
     const reading = document.createElement('small');
-    reading.textContent = `《${def.reading}》`;
-    b.append(name, reading);
-    // 今は使えない能力（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
+    reading.textContent = def.reading;
+    b.append(rar, plate, name, reading);
+    // 今は使えない技（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
     if (!usable.has(id)) b.disabled = true;
-    b.addEventListener('click', () => useAbility(id));
+    const showDesc = () => {
+      handDescEl.textContent = def.text;
+    };
+    b.addEventListener('mouseenter', showDesc);
+    b.addEventListener('focus', showDesc);
+    b.addEventListener('click', () => {
+      showDesc();
+      useAbility(id);
+    });
     abilitiesEl.appendChild(b);
+  }
+  if (!debugShowAll) {
+    const hide = document.createElement('button');
+    hide.className = 'hand-btn';
+    hide.textContent = '手札を隠す';
+    hide.addEventListener('click', () => {
+      if (busy) return;
+      handRevealed = false;
+      refresh();
+    });
+    abilitiesEl.appendChild(hide);
+  }
+}
+
+/** 上の、プレイヤーカード: 名前・壁の残り（目盛り）・短い壁・壁封じ・手札の枚数（裏向き）。手番の人を目立たせる */
+function renderPlayerCards(): void {
+  for (const p of [0, 1] as const) {
+    const card = pcardEls[p];
+    card.replaceChildren();
+    card.classList.toggle('active', state.winner === null ? state.turn === p : state.winner === p);
+    card.appendChild(div('pname', NAMES[p]));
+    const walls = div('prow');
+    walls.append(document.createTextNode('壁'));
+    const pips = div('pips');
+    for (let i = 0; i < WALLS_PER_PLAYER; i++) {
+      const pip = document.createElement('span');
+      pip.className = i < state.wallsLeft[p] ? 'pip' : 'pip off';
+      pips.appendChild(pip);
+    }
+    walls.appendChild(pips);
+    if (state.shortWalls[p] > 0) walls.appendChild(div('tag', `短 ${state.shortWalls[p]}`));
+    if (state.wallBlocked[p]) walls.appendChild(div('tag', '壁封じ'));
+    card.appendChild(walls);
+    const hand = div('prow');
+    hand.append(document.createTextNode('手札'));
+    // 相手の手札は、枚数だけ（デバッグのときだけ、中身も）
+    const shown = visibleCards(state, p, false, debugShowAll);
+    if (shown !== null) for (const id of shown) hand.appendChild(miniCard(id));
+    else for (let i = 0; i < handCount(state, p); i++) hand.appendChild(div('mini-back'));
+    if (handCount(state, p) === 0) hand.appendChild(document.createTextNode('なし'));
+    card.appendChild(hand);
   }
 }
 
@@ -228,6 +345,11 @@ function useAbility(id: AbilityId): void {
 }
 
 function refresh(): void {
+  // 手番が替わったら、手札をまた伏せる（前の人の手札が、次の人に見えないように）
+  if (state.turn !== lastTurn) {
+    handRevealed = false;
+    lastTurn = state.turn;
+  }
   ghost = null;
   view.setGhost(null, false);
   if (state.winner !== null || (mode === 'wall' && state.wallBlocked[state.turn])) mode = mode === 'wall' ? 'move' : mode;
@@ -247,9 +369,7 @@ function refresh(): void {
     statusEl.textContent = `${NAMES[state.winner]}の勝ち`;
     statusEl.dataset.turn = String(state.winner);
   } else {
-    const blocked = state.wallBlocked[state.turn] ? '　【壁封じ中】' : '';
-    const shortLeft = state.shortWalls[state.turn] > 0 ? `　短い壁 ${state.shortWalls[state.turn]}` : '';
-    statusEl.textContent = `${NAMES[state.turn]}の番　壁 残り ${state.wallsLeft[state.turn]}${shortLeft}${blocked}`;
+    statusEl.textContent = `${NAMES[state.turn]}の番`;
     statusEl.dataset.turn = String(state.turn);
   }
   btnMove.setAttribute('aria-pressed', String(mode === 'move'));
@@ -260,8 +380,10 @@ function refresh(): void {
   btnLength.hidden = !(state.winner === null && state.shortWalls[state.turn] > 0);
   btnLength.textContent = `壁の長さ: ${shortMode ? '短（1マス）' : '長（2マス）'}`;
   btnUndo.disabled = log.length === 0;
+  hashEl.hidden = !params.has('debug');
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
-  renderAbilities();
+  renderPlayerCards();
+  renderHand();
 }
 
 function play(action: Action): void {
@@ -419,14 +541,19 @@ btnUndo.addEventListener('click', () => {
   say('');
   refresh();
 });
-btnReset.addEventListener('click', () => {
-  if (busy) return;
+function resetGame(): void {
   seed = newSeed();
   state = newGame(seed);
   log = [];
   mode = 'move';
+  handRevealed = false;
+  lastTurn = state.turn;
   say('');
   refresh();
+}
+btnReset.addEventListener('click', () => {
+  if (busy) return;
+  resetGame();
 });
 
 // デバッグモード: 右上の DEBUG ボタン（または URL に ?debug）で開く。公開前に外す。
@@ -480,7 +607,16 @@ function buildDebugPanel(): void {
   });
   label.append(check, '能力を使っても減らさない');
 
-  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の能力で使うときの演出'), select, label);
+  const labelAll = document.createElement('label');
+  const checkAll = document.createElement('input');
+  checkAll.type = 'checkbox';
+  checkAll.addEventListener('change', () => {
+    debugShowAll = checkAll.checked;
+    refresh();
+  });
+  labelAll.append(checkAll, '手札を、全部見る');
+
+  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の能力で使うときの演出'), select, label, labelAll);
 
   const toggle = (open: boolean) => {
     panel.hidden = !open;
@@ -490,7 +626,7 @@ function buildDebugPanel(): void {
   toggle(new URLSearchParams(location.search).has('debug'));
 
   window.addEventListener('keydown', (e) => {
-    if (panel.hidden) return;
+    if (panel.hidden || shell.isOpen()) return;
     const rarity = RARITIES[Number(e.key) - 1];
     if (rarity !== undefined) debugEffect(rarity);
   });
@@ -498,7 +634,7 @@ function buildDebugPanel(): void {
 buildDebugPanel();
 
 window.addEventListener('keydown', (e) => {
-  if (busy) return;
+  if (busy || shell.isOpen()) return;
   if (e.key === 'r' || e.key === 'R') {
     orient = orient === 'h' ? 'v' : 'h';
     refresh();
@@ -506,6 +642,20 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     setMode(mode === 'wall' ? 'move' : 'wall');
   }
+});
+
+// オープニング・メニュー・技一覧・あそびかた。?skip か ?debug が付いていれば、オープニングを飛ばす
+const shell = createShell({
+  skipOpening: params.has('skip') || params.has('debug'),
+  onSlam: playTitleSfx,
+  onStart: () => {
+    handRevealed = false;
+    refresh();
+  },
+  onRestart: resetGame,
+});
+el('btn-menu').addEventListener('click', () => {
+  if (!busy) shell.openMenu();
 });
 
 refresh();

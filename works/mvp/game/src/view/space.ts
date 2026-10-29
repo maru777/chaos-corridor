@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { makeGlowTexture, makeSparkleTexture, outlineMesh } from './fx';
+import { OUTLINE_COLOR, makeGlowTexture, makeSparkleTexture, outlineMesh } from './fx';
+import { PLANETS } from './planets';
+import type { PlanetDef } from './planets';
 
 /**
  * 宇宙の背景（宇宙テーマ）。コードだけで作る、絵として整えた宇宙。
@@ -73,6 +75,12 @@ const PLANET_VERT = /* glsl */ `
 `;
 
 const PLANET_FRAG = /* glsl */ `
+  uniform vec3 uColA;
+  uniform vec3 uColB;
+  uniform vec3 uRim;
+  uniform float uRadius;
+  uniform float uBandFreq;
+  uniform float uSeed;
   varying vec3 vWN;
   varying vec3 vP;
   varying vec3 vView;
@@ -81,13 +89,14 @@ const PLANET_FRAG = /* glsl */ `
     vec3 N = normalize(vWN);
     vec3 V = normalize(vView);
     vec3 L = normalize(vec3(0.7, 0.45, 0.6));
+    vec3 p = vP / uRadius; // 惑星の大きさによらず、同じ見た目の模様になる
     // トゥーン: 影は 3 段、縞は 2 色のはっきりした帯、縁の光は段になる
     float lit = floor(smoothstep(-0.15, 0.65, dot(N, L)) * 2.99) / 2.0;
-    float bands = step(0.5, 0.5 + 0.5 * sin(vP.y * 0.9 + fbm(vP * 0.25) * 5.0));
-    vec3 surf = mix(vec3(0.16, 0.55, 0.95), vec3(0.95, 0.45, 0.85), bands);
-    surf = mix(surf, vec3(0.95, 0.98, 1.0), step(0.72, fbm(vP * 0.4)) * 0.6);
+    float bands = step(0.5, 0.5 + 0.5 * sin(p.y * uBandFreq + fbm(p * 1.6 + uSeed) * 5.0));
+    vec3 surf = mix(uColA, uColB, bands);
+    surf = mix(surf, vec3(0.95, 0.98, 1.0), step(0.72, fbm(p * 2.6 + uSeed * 1.7)) * 0.6);
     float rim = step(0.62, 1.0 - max(dot(N, V), 0.0));
-    vec3 col = surf * (0.35 + 0.65 * lit) + vec3(0.55, 0.85, 1.0) * rim * (0.3 + 0.7 * lit);
+    vec3 col = surf * (0.26 + 0.6 * lit) + uRim * rim * (0.2 + 0.5 * lit);
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -160,23 +169,52 @@ function bakeNebula(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
   pmrem.dispose();
 }
 
-function buildPlanet(glow: THREE.Texture): THREE.Group {
+/** 惑星 1 つ（本体・黒縁・暈・あれば輪）。自転させる本体を spin に入れて返す */
+function buildPlanet(glow: THREE.Texture, def: PlanetDef): { group: THREE.Group; body: THREE.Mesh } {
   const g = new THREE.Group();
-  const radius = 6;
-  const planet = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 64, 48),
-    new THREE.ShaderMaterial({ vertexShader: PLANET_VERT, fragmentShader: PLANET_FRAG }),
+  const r = def.radius;
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(r, 64, 48),
+    new THREE.ShaderMaterial({
+      vertexShader: PLANET_VERT,
+      fragmentShader: PLANET_FRAG,
+      uniforms: {
+        uColA: { value: new THREE.Vector3(...def.colA) },
+        uColB: { value: new THREE.Vector3(...def.colB) },
+        uRim: { value: new THREE.Vector3(...def.rim) },
+        uRadius: { value: r },
+        uBandFreq: { value: def.bandFreq },
+        uSeed: { value: def.seed },
+      },
+    }),
   );
-  // 惑星にも黒縁（遠くにあるので、縁は太め）
-  const hull = outlineMesh(new THREE.SphereGeometry(radius, 48, 32), 0.28);
+  // 惑星にも黒縁（遠くにあるので、縁は太め。小さい惑星は、細め）
+  const hull = outlineMesh(new THREE.SphereGeometry(r, 48, 32), Math.max(0.1, r * 0.045));
   const halo = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: glow, color: 0x4a86ff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.SpriteMaterial({ map: glow, color: def.halo, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
-  halo.scale.set(radius * 4.2, radius * 4.2, 1);
+  halo.scale.set(r * 3.4, r * 3.4, 1);
   halo.renderOrder = -1;
-  g.add(halo, hull, planet);
-  g.position.set(-15, -20, -56);
-  return g;
+  g.add(halo, hull, body);
+
+  if (def.ring) {
+    // 輪: 黒縁つきの、斜めに傾いた平らな輪。惑星の影になる部分は、奥行きで自然に隠れる
+    const tilt = new THREE.Group();
+    const black = new THREE.Mesh(
+      new THREE.RingGeometry(r * def.ring.inner * 0.96, r * def.ring.outer * 1.03, 80),
+      new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.DoubleSide, toneMapped: false }),
+    );
+    const colored = new THREE.Mesh(
+      new THREE.RingGeometry(r * def.ring.inner, r * def.ring.outer, 80),
+      new THREE.MeshBasicMaterial({ color: def.ring.color, side: THREE.DoubleSide, toneMapped: false }),
+    );
+    colored.position.z = 0.02;
+    tilt.add(black, colored);
+    tilt.rotation.set(-Math.PI / 2 + def.ring.tilt, 0, 0.3);
+    g.add(tilt);
+  }
+  g.position.set(...def.pos);
+  return { group: g, body };
 }
 
 export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Space {
@@ -188,8 +226,8 @@ export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): 
   const glow = makeGlowTexture();
   const stars = buildStars(makeSparkleTexture());
   const dust = buildDust(glow);
-  const planet = buildPlanet(glow);
-  scene.add(stars, dust, planet);
+  const planets = PLANETS.map((def) => ({ def, ...buildPlanet(glow, def) }));
+  scene.add(stars, dust, ...planets.map((p) => p.group));
   const dustPos = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
   let last = 0;
 
@@ -201,7 +239,7 @@ export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): 
       scene.backgroundRotation.y += dt * 0.006;
       scene.environmentRotation.y += dt * 0.006;
       stars.rotation.y -= dt * 0.012;
-      planet.children[2]!.rotation.y += dt * 0.03;
+      for (const p of planets) p.body.rotation.y += dt * p.def.spin;
       for (let i = 0; i < DUST_COUNT; i++) {
         let z = dustPos.getZ(i) - dt * 1.2;
         if (z < -DUST_BOX.z) z += DUST_BOX.z * 2;

@@ -138,6 +138,21 @@ export function playWallSfx(player: 0 | 1): string {
   return playVariant('wall', WALL_RECIPES, player);
 }
 
+/** タイトルのロゴが「ドン!!」と落ちる音: 風を切る音 → 重い衝撃 → 長い和音ときらめき */
+export function playTitleSfx(): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.26;
+  master.connect(c.destination);
+  const t0 = c.currentTime + 0.02;
+  const hit = t0 + 0.38;
+  whoosh(c, master, 300, 6000, t0, 0.38, 0.8);
+  thunderHit(c, master, hit, 1.1);
+  for (const f of [NOTE.C4, NOTE.G4, NOTE.C5, NOTE.E5]) tone(c, master, 'sawtooth', f, f, hit, 1.6, 0.1);
+  [NOTE.G5, NOTE.C6, NOTE.E6].forEach((f, i) => tone(c, master, 'triangle', f, f, hit + 0.25 + i * 0.14, 0.7, 0.28));
+}
+
 /** 雷が落ちる音: 鋭い破裂（高い帯域のノイズ）→ 重い低音 → 長く尾を引くごろごろ */
 function thunderHit(c: AudioContext, out: AudioNode, start: number, vol: number): void {
   whoosh(c, out, 6000, 2000, start - 0.01, 0.12, 1.2 * vol);

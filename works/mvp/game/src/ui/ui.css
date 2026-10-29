@@ -1,0 +1,198 @@
+/*
+ * UI の見た目（アニメ・漫画調）。太い黒縁・ずらした黒い影・明るい色の面。
+ * 色: UNCOMMON=緑 / RARE=青 / EPIC=紫 / LEGENDARY=金。先手=黄 / 後手=桃。
+ * 動きは、reduced-motion（OS の「視差効果を減らす」設定）のときは止める（末尾）。
+ */
+
+:root {
+  --ink2: #05030f;
+  --c-uncommon: #7fe0a0;
+  --c-rare: #6aa8ff;
+  --c-epic: #c58cff;
+  --c-legendary: #ffd46a;
+  --p0c: #ffc928;
+  --p1c: #ff4fb8;
+  --paper: #fffbe8;
+}
+
+/* ===== 上の表示: プレイヤーカード ===== */
+#top { align-items: flex-start; }
+#center { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1 1 100%; order: 0; }
+#pcard0 { order: 1; }
+#pcard1 { order: 2; }
+.pcard {
+  --pc: var(--p0c);
+  display: flex; flex-direction: column; gap: 3px; min-width: 128px; padding: 6px 10px 7px;
+  background: var(--paper); color: #111; border: 3px solid var(--ink2); border-radius: 12px; box-shadow: 4px 4px 0 var(--ink2);
+  font-size: 12px; font-weight: 800; position: relative; transition: transform 160ms, box-shadow 160ms;
+}
+.pcard[data-player="1"] { --pc: var(--p1c); }
+.pcard::before { content: ""; position: absolute; left: -3px; top: -3px; right: -3px; height: 9px; background: var(--pc); border: 3px solid var(--ink2); border-radius: 10px 10px 0 0; }
+.pcard .pname { margin-top: 6px; font-size: 14px; font-weight: 900; letter-spacing: 0.04em; }
+.pcard .prow { display: flex; align-items: center; gap: 6px; min-height: 14px; }
+.pcard .pips { display: flex; gap: 2px; }
+.pcard .pip { width: 7px; height: 11px; border: 2px solid var(--ink2); background: var(--pc); border-radius: 2px; }
+.pcard .pip.off { background: #ddd; opacity: 0.45; }
+.pcard .mini-back { width: 13px; height: 18px; border: 2px solid var(--ink2); border-radius: 3px; background: repeating-linear-gradient(45deg, #2a2160 0 3px, #3a2d8a 3px 6px); }
+.pcard .mini-card { width: 18px; height: 22px; border: 2px solid var(--ink2); border-radius: 3px; display: grid; place-items: center; }
+.pcard .mini-card svg { width: 15px; height: 15px; }
+.pcard .tag { padding: 0 6px; border: 2px solid var(--ink2); border-radius: 99px; background: #8fe3ff; font-size: 10px; }
+.pcard.active { transform: translateY(-2px) scale(1.05); box-shadow: 5px 5px 0 var(--ink2), 0 0 0 3px var(--pc); animation: pcard-pulse 1.6s ease-in-out infinite; }
+.pcard:not(.active) { opacity: 0.9; }
+@keyframes pcard-pulse { 0%, 100% { box-shadow: 5px 5px 0 var(--ink2), 0 0 0 3px var(--pc); } 50% { box-shadow: 5px 5px 0 var(--ink2), 0 0 0 6px var(--pc); } }
+
+#btn-menu { position: fixed; top: 8px; left: 8px; z-index: 30; min-height: 34px; padding: 4px 12px; font-size: 13px; }
+
+/* ===== 下の表示: 手札（カード） ===== */
+#abilities { flex-basis: 100%; display: flex; gap: 10px; justify-content: center; align-items: flex-end; flex-wrap: wrap; pointer-events: none; min-height: 40px; }
+#abilities > * { pointer-events: auto; }
+#hand-desc { flex-basis: 100%; text-align: center; min-height: 18px; font-size: 13px; font-weight: 800; color: #fff; -webkit-text-stroke: 3px var(--ink2); paint-order: stroke fill; pointer-events: none; }
+
+.acard {
+  --rc: var(--c-uncommon);
+  position: relative; overflow: hidden; width: 108px; min-height: 142px; padding: 6px 6px 9px; gap: 3px;
+  display: flex; flex-direction: column; align-items: center;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rc) 40%, #fff), var(--rc) 70%, color-mix(in srgb, var(--rc) 70%, #000));
+  color: #111; border: 3px solid var(--ink2); border-radius: 13px; box-shadow: 4px 4px 0 var(--ink2);
+  transform: rotate(var(--tilt, 0deg)); transition: transform 140ms, box-shadow 140ms, filter 140ms;
+  line-height: 1.15;
+}
+.acard:nth-child(odd) { --tilt: -1.5deg; }
+.acard:nth-child(even) { --tilt: 1.5deg; }
+.acard.uncommon { --rc: var(--c-uncommon); }
+.acard.rare { --rc: var(--c-rare); }
+.acard.epic { --rc: var(--c-epic); }
+.acard.legendary { --rc: var(--c-legendary); }
+.acard .acard-rar { padding: 1px 9px; border-radius: 99px; background: var(--ink2); color: var(--rc); font-size: 10px; font-weight: 900; letter-spacing: 0.18em; }
+.acard .acard-plate { display: grid; place-items: center; width: 62px; height: 62px; border: 3px solid var(--ink2); border-radius: 50%; background: var(--paper); color: color-mix(in srgb, var(--rc) 78%, #05030f); box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.12); }
+.acard .ability-icon { width: 50px; height: 50px; }
+.acard strong { font-size: 13px; font-weight: 900; text-align: center; }
+.acard small { font-size: 9px; font-weight: 800; opacity: 0.85; text-align: center; }
+.acard::before { content: ""; position: absolute; inset: -40% -60%; pointer-events: none; opacity: 0; background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.7) 50%, transparent 58%); transform: translateX(-60%); }
+.acard.rare::before, .acard.epic::before, .acard.legendary::before { opacity: 1; animation: sheen 3.6s ease-in-out infinite; }
+.acard.epic::before { animation-duration: 2.8s; }
+.acard.legendary::before { animation-duration: 2.2s; }
+.acard.legendary { box-shadow: 4px 4px 0 var(--ink2), 0 0 14px 2px rgba(255, 212, 106, 0.8); animation: legend-glow 1.8s ease-in-out infinite; }
+.acard.epic { box-shadow: 4px 4px 0 var(--ink2), 0 0 10px 1px rgba(197, 140, 255, 0.7); }
+@keyframes sheen { 0%, 55% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
+@keyframes legend-glow { 0%, 100% { box-shadow: 4px 4px 0 var(--ink2), 0 0 10px 1px rgba(255, 212, 106, 0.6); } 50% { box-shadow: 4px 4px 0 var(--ink2), 0 0 20px 5px rgba(255, 212, 106, 0.95); } }
+@media (hover: hover) {
+  .acard:not(:disabled):hover { transform: translateY(-6px) rotate(0deg) scale(1.04); box-shadow: 6px 8px 0 var(--ink2); }
+}
+.acard:active:not(:disabled) { transform: translateY(2px) scale(0.98); box-shadow: 2px 2px 0 var(--ink2); }
+.acard[aria-pressed="true"] { outline: 4px solid #fff; outline-offset: 2px; transform: translateY(-8px) rotate(0deg) scale(1.06); }
+.acard:disabled { filter: grayscale(0.85) brightness(0.8); box-shadow: 2px 2px 0 var(--ink2); }
+.acard:disabled::before { animation: none; opacity: 0; }
+
+.card-back { width: 70px; height: 96px; border: 3px solid var(--ink2); border-radius: 11px; box-shadow: 4px 4px 0 var(--ink2); display: grid; place-items: center;
+  background: repeating-linear-gradient(45deg, #2a2160 0 7px, #3a2d8a 7px 14px); position: relative; }
+.card-back::after { content: "★"; color: #ffd84a; font-size: 28px; -webkit-text-stroke: 3px var(--ink2); paint-order: stroke fill; }
+.card-back:nth-child(odd) { transform: rotate(-3deg); }
+.card-back:nth-child(even) { transform: rotate(3deg); }
+
+.hand-btn { align-self: center; min-height: 40px; padding: 6px 14px; font-size: 14px; }
+.hand-btn.primary { background: #ffd84a; animation: hand-btn-pulse 1.4s ease-in-out infinite; }
+@keyframes hand-btn-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.hand-hint { align-self: center; font-size: 11px; font-weight: 800; color: #fff; -webkit-text-stroke: 3px var(--ink2); paint-order: stroke fill; }
+.reveal-row { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.result-hand { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border: 3px solid var(--ink2); border-radius: 10px; background: var(--paper); box-shadow: 3px 3px 0 var(--ink2); font-size: 12px; font-weight: 800; }
+.result-hand .mini-card { width: 24px; height: 28px; border: 2px solid var(--ink2); border-radius: 4px; display: grid; place-items: center; }
+.result-hand .mini-card svg { width: 20px; height: 20px; }
+
+/* ===== 重なる画面（オープニング・技一覧・あそびかた） ===== */
+.overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; }
+.overlay[hidden] { display: none; }
+
+.modal { background: rgba(2, 1, 14, 0.78); z-index: 45; padding: 12px; }
+.modal-box { width: min(920px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--paper); color: #111; border: 4px solid var(--ink2); border-radius: 16px; box-shadow: 8px 8px 0 var(--ink2); overflow: hidden; }
+.modal-box > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #ffd84a; border-bottom: 4px solid var(--ink2); }
+.modal-box h2 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 0.08em; font-style: italic; -webkit-text-stroke: 0; }
+.modal-body { overflow-y: auto; padding: 12px 14px 18px; -webkit-overflow-scrolling: touch; }
+
+/* 技一覧 */
+.codex-group { margin-bottom: 14px; }
+.codex-head { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 14px; }
+.codex-rarity { padding: 2px 12px; border: 3px solid var(--ink2); border-radius: 99px; background: var(--rc, #ddd); font-weight: 900; letter-spacing: 0.12em; box-shadow: 2px 2px 0 var(--ink2); }
+.codex-rarity-chance { font-size: 12px; font-weight: 800; }
+.codex-group.uncommon { --rc: var(--c-uncommon); }
+.codex-group.rare { --rc: var(--c-rare); }
+.codex-group.epic { --rc: var(--c-epic); }
+.codex-group.legendary { --rc: var(--c-legendary); }
+.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.codex-card { --rc: #ddd; display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 3px solid var(--ink2); border-radius: 12px; box-shadow: 3px 3px 0 var(--ink2);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rc) 35%, #fff), color-mix(in srgb, var(--rc) 80%, #fff)); }
+.codex-card.uncommon { --rc: var(--c-uncommon); }
+.codex-card.rare { --rc: var(--c-rare); }
+.codex-card.epic { --rc: var(--c-epic); }
+.codex-card.legendary { --rc: var(--c-legendary); }
+.codex-plate { flex: none; display: grid; place-items: center; width: 64px; height: 64px; border: 3px solid var(--ink2); border-radius: 50%; background: var(--paper); color: color-mix(in srgb, var(--rc) 78%, #05030f); }
+.codex-plate svg { width: 52px; height: 52px; }
+.codex-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.codex-name { font-size: 16px; font-weight: 900; }
+.codex-reading { font-size: 11px; font-weight: 800; opacity: 0.8; }
+.codex-text { margin: 3px 0 0; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.codex-chance { align-self: flex-start; margin-top: 3px; padding: 0 8px; border: 2px solid var(--ink2); border-radius: 99px; background: #fff; font-size: 10px; font-weight: 900; }
+
+/* あそびかた */
+.rules-section { margin-bottom: 14px; }
+.rules-section h3 { display: inline-block; margin: 0 0 6px; padding: 2px 12px; border: 3px solid var(--ink2); border-radius: 8px; background: #8fe3ff; box-shadow: 3px 3px 0 var(--ink2); font-size: 15px; font-weight: 900; }
+.rules-section ul { margin: 4px 0 0; padding-left: 22px; }
+.rules-section li { margin: 3px 0; font-size: 14px; font-weight: 700; line-height: 1.55; }
+
+/* ===== オープニング ===== */
+#opening { background: radial-gradient(circle at 50% 42%, rgba(20, 8, 64, 0.72), rgba(2, 1, 14, 0.94) 85%); overflow: hidden; touch-action: manipulation; user-select: none; }
+#opening[data-phase="closed"] { display: none; }
+.op-speed { position: absolute; inset: -25%; opacity: 0.0; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 244, 190, 0.85) 0 0.7deg, transparent 0.7deg 3.6deg);
+  -webkit-mask: radial-gradient(circle at 50% 42%, transparent 14%, #000 62%); mask: radial-gradient(circle at 50% 42%, transparent 14%, #000 62%); }
+#opening[data-phase="splash"] .op-speed { opacity: 0.18; animation: op-speed-idle 6s linear infinite; }
+#opening[data-phase="slam"] .op-speed { animation: op-speed-slam 1.7s steps(1, end) both; }
+#opening[data-phase="menu"] .op-speed { opacity: 0.14; animation: op-speed-idle 8s linear infinite; }
+@keyframes op-speed-idle { to { transform: rotate(360deg); } }
+@keyframes op-speed-slam { 0% { opacity: 0; transform: rotate(0); } 12% { opacity: 1; transform: rotate(2deg); } 30% { opacity: 0.8; transform: rotate(-1.5deg); } 55% { opacity: 0.45; transform: rotate(1deg); } 100% { opacity: 0.14; transform: rotate(0); } }
+
+.op-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; text-align: center; }
+.op-title { margin: 0; display: flex; flex-direction: column; align-items: center; line-height: 0.98; font-style: italic; font-weight: 900; letter-spacing: 0.04em;
+  font-size: clamp(54px, 14.5vw, 124px); transform: rotate(-4deg); }
+.op-title span { display: block; color: #fff; -webkit-text-stroke: 0.2em var(--ink2); paint-order: stroke fill; text-shadow: 0.07em 0.07em 0 var(--ink2); }
+.op-line1 { color: #ffd84a !important; }
+.op-line2 { color: #ff6fb5 !important; margin-left: 0.3em; }
+.op-sub { margin: 4px 0 0; font-size: clamp(14px, 3.6vw, 24px); font-weight: 900; letter-spacing: 0.5em; padding-left: 0.5em; color: #fff; -webkit-text-stroke: 5px var(--ink2); paint-order: stroke fill; }
+.op-tag { margin: 0; padding: 4px 16px; border: 3px solid var(--ink2); border-radius: 99px; background: var(--paper); color: #111; box-shadow: 4px 4px 0 var(--ink2); font-size: clamp(12px, 3.2vw, 17px); font-weight: 900; transform: rotate(-1.5deg); }
+.op-tap { margin: 18px 0 0; font-size: clamp(16px, 4.4vw, 26px); font-weight: 900; letter-spacing: 0.3em; color: #fff; -webkit-text-stroke: 5px var(--ink2); paint-order: stroke fill; animation: op-blink 1.1s ease-in-out infinite; }
+@keyframes op-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.op-menu { display: none; flex-direction: column; gap: 12px; margin-top: 18px; width: min(340px, 86vw); }
+#opening[data-phase="splash"] .op-menu, #opening[data-phase="slam"] .op-menu { display: none; }
+#opening[data-phase="menu"] .op-menu { display: flex; animation: op-menu-in 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+#opening:not([data-phase="splash"]) .op-tap { display: none; }
+.op-btn { min-height: 52px; padding: 10px 18px; font-size: 18px; font-weight: 900; letter-spacing: 0.12em; background: var(--paper); border-width: 4px; border-radius: 14px; box-shadow: 5px 5px 0 var(--ink2); }
+.op-btn.primary { min-height: 68px; font-size: 26px; background: #ffd84a; animation: op-primary 1.5s ease-in-out infinite; }
+@keyframes op-primary { 0%, 100% { transform: scale(1) rotate(-1deg); } 50% { transform: scale(1.05) rotate(1deg); } }
+@keyframes op-menu-in { from { opacity: 0; transform: translateY(26px) scale(0.9); } to { opacity: 1; transform: none; } }
+
+/* ロゴが「ドン!!」と落ちる演出 */
+#opening[data-phase="slam"] .op-title { animation: op-slam 1.7s cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+@keyframes op-slam {
+  0% { opacity: 0; transform: scale(3.4) rotate(-12deg); filter: blur(12px); }
+  26% { opacity: 1; transform: scale(0.9) rotate(-3deg); filter: blur(0); }
+  34% { transform: scale(1.08) rotate(-5deg); }
+  44% { transform: scale(0.98) rotate(-3.6deg); }
+  60%, 100% { opacity: 1; transform: scale(1) rotate(-4deg); filter: blur(0); }
+}
+#opening[data-phase="slam"] .op-stage { animation: op-shake 1.7s linear both; }
+@keyframes op-shake { 0%, 22% { transform: translate(0, 0); } 26% { transform: translate(-9px, 7px); } 30% { transform: translate(8px, -6px); } 36% { transform: translate(-5px, 4px); } 44% { transform: translate(3px, -2px); } 54%, 100% { transform: translate(0, 0); } }
+.op-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(circle at 50% 42%, #fffbe0, rgba(255, 220, 120, 0.6) 40%, transparent 80%); }
+#opening[data-phase="slam"] .op-flash { animation: op-flash 0.8s ease-out 0.4s both; }
+@keyframes op-flash { 0% { opacity: 0; } 14% { opacity: 0.9; } 100% { opacity: 0; } }
+.op-burst { position: absolute; left: 50%; top: 18%; display: none; width: min(60vw, 300px); aspect-ratio: 1; place-items: center; transform: translate(-50%, -50%) rotate(-8deg); pointer-events: none; }
+.op-burst svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.op-burst path { fill: #fffbe0; stroke: var(--ink2); stroke-width: 7; stroke-linejoin: miter; stroke-miterlimit: 5; }
+.op-burst span { position: relative; font-size: clamp(34px, 9vw, 64px); font-weight: 900; font-style: italic; color: #fff; -webkit-text-stroke: 0.2em var(--ink2); paint-order: stroke fill; text-shadow: 0.06em 0.06em 0 var(--ink2); }
+#opening[data-phase="slam"] .op-burst { display: grid; animation: op-burst 1.5s ease-out 0.38s both; }
+@keyframes op-burst { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(2.4); } 10% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(0.92); } 20% { transform: translate(-50%, -50%) rotate(-8deg) scale(1.06); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pcard.active, .acard::before, .acard.legendary, .hand-btn.primary, .op-tap, .op-btn.primary, .op-speed { animation: none !important; }
+  #opening[data-phase="slam"] .op-title, #opening[data-phase="slam"] .op-stage, #opening[data-phase="slam"] .op-flash, #opening[data-phase="slam"] .op-speed { animation: none !important; }
+  #opening[data-phase="slam"] .op-flash { display: none; }
+}
