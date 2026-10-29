@@ -1,9 +1,13 @@
 import type { Rarity } from '../abilities';
 import { THUNDER_HITS_MS } from './bolt';
+import { MOVE_RECIPES, WALL_RECIPES, pickVariant, pitchJitter, playerPitch } from './sfxrecipes';
+import type { SfxRecipe } from './sfxrecipes';
 
 /**
- * 能力を使ったときの効果音。音の素材は使わず、ブラウザの音声機能で合成する。
- * レア度が高いほど、長く・厚くなる。音量は控えめ。
+ * 効果音。音の素材は使わず、ブラウザの音声機能で合成する。音量は控えめ。
+ * - 能力を使ったとき: レア度が高いほど、長く・厚くなる（playSfx）。
+ * - コマの移動・壁を置く: 数種類をランダムに選ぶ。同じ音は続かず、高さを少しずらし、先手と後手で高さを変える
+ *   （playMoveSfx / playWallSfx。音の作り方のデータは sfxrecipes.ts）。
  */
 
 let ctx: AudioContext | null = null;
@@ -91,6 +95,41 @@ export function playSfx(rarity: Rarity, impactSec: number): void {
     for (const f of [NOTE.C4, NOTE.E4, NOTE.G4, NOTE.C5, NOTE.G5]) tone(c, master, 'sawtooth', f, f, hit, 2.2, 0.1);
     [NOTE.C6, NOTE.E6, NOTE.G5, NOTE.C6, NOTE.E6].forEach((f, i) => tone(c, master, 'triangle', f, f, hit + 0.2 + i * 0.16, 0.9, 0.3));
   }
+}
+
+// 前回鳴らした音の番号（同じ音が続かないように覚えておく）
+const lastVariant = { move: -1, wall: -1 };
+
+/** 音の作り方（データ）どおりに鳴らす。pitch は、全体の高さの倍率 */
+function playRecipe(c: AudioContext, out: AudioNode, recipe: SfxRecipe, start: number, pitch: number): void {
+  for (const v of recipe.voices) {
+    const t = start + v.at;
+    if (v.kind === 'tone') tone(c, out, v.wave ?? 'sine', v.from * pitch, v.to * pitch, t, v.dur, v.vol);
+    else whoosh(c, out, v.from * pitch, v.to * pitch, t, v.dur, v.vol);
+  }
+}
+
+function playVariant(kind: 'move' | 'wall', recipes: readonly SfxRecipe[], player: 0 | 1): void {
+  const c = getContext();
+  if (c === null) return;
+  const index = pickVariant(recipes.length, lastVariant[kind], Math.random);
+  lastVariant[kind] = index;
+  const recipe = recipes[index];
+  if (!recipe) return;
+  const master = c.createGain();
+  master.gain.value = kind === 'wall' ? 0.3 : 0.22;
+  master.connect(c.destination);
+  playRecipe(c, master, recipe, c.currentTime + 0.005, playerPitch(player) * pitchJitter(Math.random));
+}
+
+/** コマが動く音（軽くて短い）。player は、動かした人 */
+export function playMoveSfx(player: 0 | 1): void {
+  playVariant('move', MOVE_RECIPES, player);
+}
+
+/** 壁を置く音（重くて、衝撃がある）。player は、置いた人 */
+export function playWallSfx(player: 0 | 1): void {
+  playVariant('wall', WALL_RECIPES, player);
 }
 
 /** 雷が落ちる音: 鋭い破裂（高い帯域のノイズ）→ 重い低音 → 長く尾を引くごろごろ */

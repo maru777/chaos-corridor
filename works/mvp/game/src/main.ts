@@ -4,7 +4,7 @@ import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { cellToWorld, nearestCell, nearestWallSlot, wallToWorld } from './view/layout';
 import { showPop } from './view/popsfx';
-import { playSfx } from './view/sfx';
+import { playMoveSfx, playSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 
 type Mode = 'move' | 'wall' | 'diagonal' | 'reclaim';
@@ -216,7 +216,7 @@ function play(action: Action): void {
 
 const PLAYER_COLOR = ['#38d9ff', '#ff4fb8'] as const;
 
-/** 操作に合わせた、漫画の擬音。壁は「ドン!」、コマは「タッ!」、勝負がついたら「ドォォォン!!」 */
+/** 操作に合わせた、漫画の擬音と効果音。壁は「ドン!」、コマは「タッ!」、勝負がついたら「ドォォォン!!」 */
 function popFor(action: Action, mover: PlayerId): void {
   const color = PLAYER_COLOR[mover];
   const pops = el('pops');
@@ -224,10 +224,12 @@ function popFor(action: Action, mover: PlayerId): void {
     const w = wallToWorld(state.size, action.x, action.y);
     const p = view.project(w.x, w.z);
     showPop(pops, 'wall', p.x, p.y, color);
+    playWallSfx(mover);
   } else if (action.type === 'move') {
     const w = cellToWorld(state.size, action.to.x, action.to.y);
     const p = view.project(w.x, w.z);
     showPop(pops, 'move', p.x, p.y, color);
+    playMoveSfx(mover);
   }
   if (state.winner !== null) showPop(pops, 'win', 0, 0, '#ffd46a');
 }
