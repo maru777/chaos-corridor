@@ -8,37 +8,40 @@
       :root {
         --p0: #38d9ff;
         --p1: #ff4fb8;
-        --ink: #e8f0ff;
-        --panel: rgba(8, 12, 30, 0.72);
+        /* アニメ調（試作）: 明るい色の面に、太い黒縁と、ずらした黒い影（ステッカーのような見た目） */
+        --ink: #111;
+        --panel: #fffbe8;
+        --line: #05030f;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; height: 100%; background: #02030a; color: var(--ink); font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; overflow: hidden; }
+      html, body { margin: 0; height: 100%; background: #02030a; color: var(--ink); font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; font-weight: 700; overflow: hidden; }
       #stage { position: fixed; inset: 0; touch-action: none; }
       #stage canvas { display: block; width: 100%; height: 100%; }
       .hud { position: fixed; left: 0; right: 0; padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; pointer-events: none; }
       .hud > * { pointer-events: auto; }
       #top { top: 0; }
       #bottom { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
-      .panel { background: var(--panel); border: 1px solid rgba(160, 190, 255, 0.25); border-radius: 12px; padding: 8px 14px; backdrop-filter: blur(6px); }
-      #status { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
-      #status[data-turn="0"] { color: var(--p0); }
-      #status[data-turn="1"] { color: var(--p1); }
-      #msg { min-height: 1.4em; font-size: 14px; color: #ffd27a; }
-      button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid rgba(160, 190, 255, 0.35); border-radius: 10px; padding: 10px 16px; min-height: 44px; cursor: pointer; }
-      button[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); border-color: #8fb0ff; }
-      button:disabled { opacity: 0.4; cursor: default; }
-      #hash { font-size: 11px; opacity: 0.55; }
+      .panel { background: var(--panel); color: var(--ink); border: 3px solid var(--line); border-radius: 12px; padding: 6px 14px; box-shadow: 4px 4px 0 var(--line); }
+      #status { font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
+      #status[data-turn="0"] { color: #0a85b8; }
+      #status[data-turn="1"] { color: #d0207a; }
+      #msg { min-height: 1.4em; font-size: 14px; font-weight: 800; color: #8a4b00; }
+      button { font: inherit; font-weight: 800; color: var(--ink); background: #ffd84a; border: 3px solid var(--line); border-radius: 10px; box-shadow: 3px 3px 0 var(--line); padding: 8px 14px; min-height: 44px; cursor: pointer; transition: transform 60ms, box-shadow 60ms; }
+      button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+      button[aria-pressed="true"] { background: #38d9ff; }
+      button:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
+      #hash { font-size: 11px; font-weight: 700; opacity: 0.8; }
       #msg-panel:has(#msg:empty) { display: none; }
       #abilities { flex-basis: 100%; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; pointer-events: none; }
       #abilities > * { pointer-events: auto; }
       .ability-none { font-size: 13px; opacity: 0.6; }
-      button.ability { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 8px 14px; border-width: 2px; }
-      button.ability small { font-size: 11px; opacity: 0.8; }
-      button.ability.uncommon { border-color: #7fe0a0; }
-      button.ability.rare { border-color: #6aa8ff; }
-      button.ability.epic { border-color: #c58cff; }
-      button.ability.legendary { border-color: #ffd46a; }
-      button.ability[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); }
+      button.ability { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 8px 14px; }
+      button.ability small { font-size: 11px; font-weight: 700; opacity: 0.85; }
+      button.ability.uncommon { background: #8bf0b0; }
+      button.ability.rare { background: #8fbaff; }
+      button.ability.epic { background: #d3a5ff; }
+      button.ability.legendary { background: #ffe27a; }
+      button.ability[aria-pressed="true"] { outline: 4px solid #fff; }
 
       /* カットイン（能力を使ったときの演出）。レア度が高いほど、大きく・長く・派手になる */
       #cutins { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
@@ -56,12 +59,15 @@
       .cutin-band, .cutin-text { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); animation: cutin-slide calc(var(--dur) - var(--band-delay, 0ms)) cubic-bezier(0.2, 0.8, 0.2, 1) var(--band-delay, 0ms) both; }
       .cutin-band { isolation: isolate; }
       .cutin-text { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-      .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
-        /* 両端は明るく、文字のある中央は暗くして、文字を読みやすくする */
-        background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 70%, #03040c), color-mix(in srgb, var(--rc) 34%, #03040c) 50%, color-mix(in srgb, var(--rc) 70%, #03040c)); }
-      /* LEGENDARY だけは、帯の塗りを透明にして、金色の細い線と、光る文字だけで見せる */
-      .cutin.legendary .cutin-band::before { border-block: 0; box-shadow: none;
-        background: linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) top / 100% 2px no-repeat, linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) bottom / 100% 2px no-repeat; }
+      /* ギザギザの帯（漫画のコマ割りのような、とげとげの黒縁）。cutin.ts が SVG の輪郭を作る。
+         黒縁（.band-edge）→ 色の塗り（.band-fill。両端は明るく、文字のある中央は暗くして読みやすく）→ 内側の細い線（.band-line） */
+      .cutin-band-art { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .band-edge { fill: var(--line); stroke: var(--line); stroke-width: 9; stroke-linejoin: miter; stroke-miterlimit: 6; }
+      .band-fill { fill: url(#band-grad); }
+      .band-line { fill: none; stroke: var(--rc); stroke-width: 2; stroke-linejoin: miter; opacity: 0.95; }
+      /* LEGENDARY だけは、帯の塗りを透明にして、黒いギザギザの縁と、金色の細い線と、光る文字だけで見せる */
+      .cutin.legendary .band-fill { display: none; }
+      .cutin.legendary .band-edge { fill: none; }
       .cutin.legendary .cutin-name { color: #fff8d0; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 0 22px var(--rc), 0 0 52px var(--rc); }
       /* 帯の色が明るくなったので、文字は白で、影をつけて読みやすくする */
       /* 文字は、すべて白系にして、黒い縁取りと影をつける（帯や効果の色と重ならないように） */
@@ -70,6 +76,23 @@
       /* 名前の文字数が多いほど、画面の幅に収まるよう小さくする（--chars は cutin.ts が設定） */
       .cutin-name { font-size: min(var(--name-size), calc(88vw / (var(--chars) * 1.25))); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; -webkit-text-stroke: 0.12em rgba(0, 0, 0, 0.55); paint-order: stroke fill; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 0, 0, 0.6); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
       .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: #eef3ff; -webkit-text-stroke: 0.2em rgba(0, 0, 0, 0.5); paint-order: stroke fill; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
+
+      /* 漫画の演出: 集中線・網点（ハーフトーン）・擬音の爆発 */
+      .cutin-speed { position: absolute; inset: -25%; opacity: 0; --lines: color-mix(in srgb, var(--rc) 35%, #fff);
+        background: repeating-conic-gradient(from 0deg at 50% 46%, var(--lines) 0 0.7deg, transparent 0.7deg 3.4deg);
+        -webkit-mask: radial-gradient(circle at 50% 46%, transparent 16%, #000 60%); mask: radial-gradient(circle at 50% 46%, transparent 16%, #000 60%);
+        animation: cutin-speed 650ms steps(1, end) var(--delay) both; }
+      .cutin-halftone { position: absolute; inset: 0; opacity: 0;
+        background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 1.7px, transparent 2.3px) 0 0 / 10px 10px;
+        -webkit-mask: radial-gradient(circle at 50% 46%, transparent 30%, #000 95%); mask: radial-gradient(circle at 50% 46%, transparent 30%, #000 95%);
+        animation: cutin-fadeio var(--dur) ease both; }
+      .cutin-sfx { position: absolute; left: var(--x); top: var(--y); width: calc(var(--size) * 3.4); height: calc(var(--size) * 3.4); display: grid; place-items: center; opacity: 0;
+        transform: translate(-50%, -50%) rotate(var(--rot)); animation: cutin-sfx var(--d) ease-out var(--delay) both; }
+      /* ふだんの操作の擬音（壁を置く「ドン!」など）。カットインより手前に出さない */
+      #pops { position: fixed; inset: 0; pointer-events: none; z-index: 15; overflow: hidden; }
+      .cutin-burst { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .cutin-burst path { fill: color-mix(in srgb, var(--rc) 55%, #fff); stroke: var(--line); stroke-width: 7; stroke-linejoin: miter; stroke-miterlimit: 5; }
+      .cutin-sfx-text { position: relative; font-size: var(--size); font-weight: 900; font-style: italic; letter-spacing: 0.04em; white-space: nowrap; color: #fff; -webkit-text-stroke: 0.2em var(--line); paint-order: stroke fill; text-shadow: 0.06em 0.06em 0 var(--line); }
 
       /* 画面を暗くする色も、レア度の色に寄せる（暗い緑・青・紫・金） */
       .cutin-dim { position: absolute; inset: 0; animation: cutin-dim var(--dur) ease both;
@@ -133,6 +156,10 @@
 
       @keyframes cutin-slide { 0% { transform: translateX(-105%); opacity: 0; } 12% { transform: translateX(0); opacity: 1; } 90% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(105%); opacity: 0; } }
       @keyframes cutin-name-pop { from { transform: scale(1.7); opacity: 0; filter: blur(8px); } to { transform: scale(1); opacity: 1; filter: blur(0); } }
+      /* 集中線は、数コマだけ、ぶるっと揺れながら走って消える（アニメのコマ送りのように） */
+      @keyframes cutin-speed { 0% { opacity: 0; transform: rotate(0deg); } 10% { opacity: 0.95; transform: rotate(1.5deg); } 25% { opacity: 0.85; transform: rotate(-1deg); } 45% { opacity: 0.7; transform: rotate(1deg); } 70% { opacity: 0.4; transform: rotate(-0.5deg); } 100% { opacity: 0; transform: rotate(0deg); } }
+      /* 擬音は、どんと大きく出て、少し縮んで、揺れて、消える */
+      @keyframes cutin-sfx { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(2.4); } 10% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.92); } 18% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(1.08); } 26% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(1.04); } }
       @keyframes cutin-dim { 0% { opacity: 0; } 10% { opacity: var(--dim); } 92% { opacity: var(--dim); } 100% { opacity: 0; } }
       @keyframes cutin-fadeio { 0% { opacity: 0; } 12% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
       /* 稲妻は、2 回ほどちらつきながら光って消える（連続した点滅にはしない） */
@@ -164,7 +191,7 @@
 
       /* OS の「視差効果を減らす」設定では、点滅・飛び散り・光の縁をなくし、帯は動かさず出し入れだけにする */
       @media (prefers-reduced-motion: reduce) {
-        .cutin-flash, .cutin-p, .cutin-edge, .fx-layer, .fx-strike-flash { display: none !important; }
+        .cutin-flash, .cutin-p, .cutin-edge, .fx-layer, .fx-strike-flash, .cutin-speed { display: none !important; }
         .cutin-band, .cutin-text { animation-name: cutin-fadeio; }
         .cutin-name, .cutin-reading { animation: none; }
       }
@@ -175,7 +202,7 @@
       #debug-panel[hidden] { display: none; }
       #debug-panel .row { display: flex; gap: 6px; flex-wrap: wrap; }
       #debug-panel button { flex: 1 1 45%; min-height: 36px; padding: 4px 8px; }
-      #debug-panel select { width: 100%; font: inherit; color: var(--ink); background: #0a1030; border: 1px solid rgba(160, 190, 255, 0.35); border-radius: 8px; padding: 6px; }
+      #debug-panel select { width: 100%; font: inherit; color: var(--ink); background: #fff; border: 2px solid var(--line); border-radius: 8px; padding: 6px; }
       #debug-panel label { display: flex; gap: 6px; align-items: center; }
       #debug-panel h4 { margin: 0; font-size: 12px; opacity: 0.7; font-weight: 600; }
     </style>
@@ -183,6 +210,7 @@
   <body>
     <div id="stage"></div>
     <div id="cutins" aria-hidden="true"></div>
+    <div id="pops" aria-hidden="true"></div>
     <button id="btn-debug" aria-pressed="false">DEBUG</button>
     <div id="debug-panel" class="panel" hidden></div>
     <div id="top" class="hud">

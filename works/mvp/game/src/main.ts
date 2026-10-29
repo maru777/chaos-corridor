@@ -2,7 +2,8 @@ import { RARITIES, abilityDef, applyAction, legalDiagonalMoves, legalPawnMoves, 
 import type { AbilityId, Action, GameState, Orientation, PlayerId, Rarity, WallSpec } from './index';
 import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
-import { nearestCell, nearestWallSlot } from './view/layout';
+import { cellToWorld, nearestCell, nearestWallSlot, wallToWorld } from './view/layout';
+import { showPop } from './view/popsfx';
 import { playSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 
@@ -210,6 +211,25 @@ function play(action: Action): void {
   state = r.state;
   log = [...log, action];
   refresh();
+  popFor(action, mover);
+}
+
+const PLAYER_COLOR = ['#38d9ff', '#ff4fb8'] as const;
+
+/** 操作に合わせた、漫画の擬音。壁は「ドン!」、コマは「タッ!」、勝負がついたら「ドォォォン!!」 */
+function popFor(action: Action, mover: PlayerId): void {
+  const color = PLAYER_COLOR[mover];
+  const pops = el('pops');
+  if (action.type === 'wall') {
+    const w = wallToWorld(state.size, action.x, action.y);
+    const p = view.project(w.x, w.z);
+    showPop(pops, 'wall', p.x, p.y, color);
+  } else if (action.type === 'move') {
+    const w = cellToWorld(state.size, action.to.x, action.to.y);
+    const p = view.project(w.x, w.z);
+    showPop(pops, 'move', p.x, p.y, color);
+  }
+  if (state.winner !== null) showPop(pops, 'win', 0, 0, '#ffd46a');
 }
 
 function replay(forSeed: number, actions: readonly Action[]): GameState {

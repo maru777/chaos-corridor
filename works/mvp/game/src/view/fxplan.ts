@@ -268,3 +268,101 @@ export function planDark(rng: () => number, layout: BoltLayout): DarkPlan {
   }));
   return { wisps, embers, tendrils, fogs };
 }
+
+// ---- 漫画の演出（ギザギザの帯・擬音の爆発） ----
+
+/**
+ * ギザギザの帯の輪郭（漫画のコマ割りのような、とげとげの縁）。
+ * 上の縁と下の縁が、互い違いにギザギザする。step はとげの間隔、amp はとげの高さ、inset は上下の余白。
+ * 左右は、画面の外までのばす（端が見えないように）。
+ */
+export function zigzagBandPath(width: number, height: number, step: number, amp: number, inset: number): string {
+  const n = Math.ceil(width / step) + 2;
+  const pts: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    pts.push(`${(-step + i * step).toFixed(1)} ${(inset + (i % 2 === 0 ? 0 : amp)).toFixed(1)}`);
+  }
+  for (let i = n; i >= 0; i--) {
+    pts.push(`${(-step + i * step + step / 2).toFixed(1)} ${(height - inset - (i % 2 === 0 ? 0 : amp)).toFixed(1)}`);
+  }
+  return `M${pts.join(' L')} Z`;
+}
+
+/** 擬音の、とげとげの爆発（吹き出し）の輪郭。中心 (0, 0)。外側の点と内側の点が、互い違いに並ぶ */
+export function burstPath(rng: () => number, rOuter: number, rInner: number, spikes: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < spikes * 2; i++) {
+    const outer = i % 2 === 0;
+    const angle = (i / (spikes * 2)) * Math.PI * 2 + (rng() - 0.5) * 0.12;
+    const r = (outer ? rOuter * (0.82 + rng() * 0.3) : rInner * (0.85 + rng() * 0.25));
+    pts.push(`${(Math.cos(angle) * r).toFixed(1)} ${(Math.sin(angle) * r).toFixed(1)}`);
+  }
+  return `M${pts.join(' L')} Z`;
+}
+
+/** 擬音（漫画の効果音の文字）。属性ごとに違い、雷は「ドドドン」と落ちるたびに出る */
+export const ONOMATOPOEIA: Readonly<Record<ElementId, readonly string[]>> = {
+  wind: ['ヒュオッ!!'],
+  water: ['ザブゥン!!'],
+  dark: ['ゴゴゴゴ…!!'],
+  thunder: ['ドン!!', 'ドン!!', 'ドン!!', 'ドォォォン!!!'],
+};
+
+export interface Onomatopoeia {
+  readonly text: string;
+  /** 中心の位置（px） */
+  readonly x: number;
+  readonly y: number;
+  readonly rotDeg: number;
+  /** 文字の大きさ（px） */
+  readonly size: number;
+  readonly delayMs: number;
+  readonly durMs: number;
+}
+
+const SFX_SIZE: Readonly<Record<Rarity, readonly number[]>> = {
+  UNCOMMON: [46],
+  RARE: [56],
+  EPIC: [70],
+  LEGENDARY: [70, 80, 92, 140],
+};
+
+/**
+ * 擬音の位置とタイミング。雷以外は、名前が決まる瞬間に、帯の上か下（帯に重ならない所）へ 1 つ出す。
+ * 雷は、雷が落ちるたび（hits）に、画面の上寄りか下寄りに出し、最後は中央の特大。
+ */
+export function planOnomatopoeia(rng: () => number, layout: BoltLayout, rarity: Rarity, impactMs: number, hitsMs: readonly number[]): Onomatopoeia[] {
+  const texts = ONOMATOPOEIA[ELEMENT_OF[rarity].id];
+  const fit = Math.min(1, layout.width / 720);
+  const out: Onomatopoeia[] = [];
+  texts.forEach((text, i) => {
+    const size = (SFX_SIZE[rarity][i] ?? 60) * fit;
+    const rotDeg = between(rng, -12, 12);
+    if (rarity === 'LEGENDARY') {
+      const last = i === texts.length - 1;
+      const upper = rng() < 0.5;
+      out.push({
+        text,
+        x: last ? layout.width * 0.5 : between(rng, 0.25, 0.75) * layout.width,
+        y: last ? layout.height * 0.3 : layout.height * (upper ? between(rng, 0.2, 0.3) : between(rng, 0.62, 0.74)),
+        rotDeg,
+        size,
+        delayMs: (hitsMs[i] ?? impactMs) + 40,
+        durMs: last ? 1500 : 700,
+      });
+    } else {
+      const above = rng() < 0.5;
+      const rawY = above ? layout.bandTop - size * 0.95 : layout.bandTop + layout.bandHeight + size * 0.95;
+      out.push({
+        text,
+        x: between(rng, 0.25, 0.75) * layout.width,
+        y: Math.min(layout.height - size * 0.7, Math.max(size * 0.7, rawY)),
+        rotDeg,
+        size,
+        delayMs: impactMs,
+        durMs: 1100,
+      });
+    }
+  });
+  return out;
+}

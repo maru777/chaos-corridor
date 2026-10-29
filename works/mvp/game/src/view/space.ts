@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeGlowTexture } from './fx';
+import { makeGlowTexture, makeSparkleTexture, outlineMesh } from './fx';
 
 /**
  * 宇宙の背景（宇宙テーマ）。コードだけで作る、絵として整えた宇宙。
@@ -42,16 +42,20 @@ const NEBULA_FRAG = /* glsl */ `
     float n2 = fbm(d * 4.6 + w * 2.1 + 9.0);
     float n3 = fbm(d * 3.0 + w * 1.4 + 21.0);
 
-    vec3 col = vec3(0.004, 0.008, 0.024);
-    col += vec3(0.08, 0.15, 0.55) * smoothstep(0.30, 0.85, n) * 0.55;
-    col += vec3(0.50, 0.12, 0.62) * smoothstep(0.45, 0.90, n2) * smoothstep(0.30, 0.80, n) * 0.7;
-    col += vec3(0.05, 0.50, 0.62) * smoothstep(0.58, 0.95, n3) * 0.32;
-    col *= 1.0 - 0.55 * smoothstep(0.50, 0.80, fbm(d * 7.0 + w * 1.5));
+    // 明るく鮮やかな色（アニメ調）。藍・青・紫・青緑・桃
+    vec3 col = vec3(0.025, 0.03, 0.16);
+    col += vec3(0.10, 0.34, 1.00) * smoothstep(0.30, 0.85, n) * 0.62;
+    col += vec3(0.78, 0.20, 0.98) * smoothstep(0.45, 0.90, n2) * smoothstep(0.30, 0.80, n) * 0.8;
+    col += vec3(0.05, 0.85, 0.95) * smoothstep(0.58, 0.95, n3) * 0.4;
+    col *= 1.0 - 0.45 * smoothstep(0.50, 0.80, fbm(d * 7.0 + w * 1.5));
 
     float glow = pow(max(dot(d, normalize(vec3(0.3, -0.35, -1.0))), 0.0), 5.0);
-    col += vec3(0.35, 0.18, 0.62) * glow * 0.3;
+    col += vec3(1.0, 0.35, 0.75) * glow * 0.35;
 
-    gl_FragColor = vec4(min(col, vec3(0.85)), 1.0);
+    // セル画のように、色の濃さを段階（約 5 段）にそろえて、境目をはっきりさせる
+    col = mix(col, floor(col * 5.0 + 0.5) / 5.0, 0.85);
+
+    gl_FragColor = vec4(min(col, vec3(0.95)), 1.0);
   }
 `;
 
@@ -77,12 +81,13 @@ const PLANET_FRAG = /* glsl */ `
     vec3 N = normalize(vWN);
     vec3 V = normalize(vView);
     vec3 L = normalize(vec3(0.7, 0.45, 0.6));
-    float lit = smoothstep(-0.15, 0.65, dot(N, L));
-    float bands = 0.5 + 0.5 * sin(vP.y * 0.9 + fbm(vP * 0.25) * 5.0);
-    vec3 surf = mix(vec3(0.10, 0.30, 0.52), vec3(0.46, 0.20, 0.58), bands);
-    surf = mix(surf, vec3(0.75, 0.85, 0.95), smoothstep(0.6, 0.9, fbm(vP * 0.4)) * 0.4);
-    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-    vec3 col = surf * (0.06 + 0.95 * lit) + vec3(0.35, 0.65, 1.0) * rim * (0.25 + 0.9 * lit);
+    // トゥーン: 影は 3 段、縞は 2 色のはっきりした帯、縁の光は段になる
+    float lit = floor(smoothstep(-0.15, 0.65, dot(N, L)) * 2.99) / 2.0;
+    float bands = step(0.5, 0.5 + 0.5 * sin(vP.y * 0.9 + fbm(vP * 0.25) * 5.0));
+    vec3 surf = mix(vec3(0.16, 0.55, 0.95), vec3(0.95, 0.45, 0.85), bands);
+    surf = mix(surf, vec3(0.95, 0.98, 1.0), step(0.72, fbm(vP * 0.4)) * 0.6);
+    float rim = step(0.62, 1.0 - max(dot(N, V), 0.0));
+    vec3 col = surf * (0.35 + 0.65 * lit) + vec3(0.55, 0.85, 1.0) * rim * (0.3 + 0.7 * lit);
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -129,7 +134,7 @@ function buildStars(glow: THREE.Texture): THREE.Points {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return new THREE.Points(
     geo,
-    new THREE.PointsMaterial({ size: 0.5, map: glow, vertexColors: true, sizeAttenuation: true, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    new THREE.PointsMaterial({ size: 1.4, map: glow, vertexColors: true, sizeAttenuation: true, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
 }
 
@@ -162,12 +167,14 @@ function buildPlanet(glow: THREE.Texture): THREE.Group {
     new THREE.SphereGeometry(radius, 64, 48),
     new THREE.ShaderMaterial({ vertexShader: PLANET_VERT, fragmentShader: PLANET_FRAG }),
   );
+  // 惑星にも黒縁（遠くにあるので、縁は太め）
+  const hull = outlineMesh(new THREE.SphereGeometry(radius, 48, 32), 0.28);
   const halo = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: glow, color: 0x4a86ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.SpriteMaterial({ map: glow, color: 0x4a86ff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   halo.scale.set(radius * 4.2, radius * 4.2, 1);
   halo.renderOrder = -1;
-  g.add(halo, planet);
+  g.add(halo, hull, planet);
   g.position.set(-15, -20, -56);
   return g;
 }
@@ -179,7 +186,7 @@ export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): 
   bakeNebula(scene, renderer);
 
   const glow = makeGlowTexture();
-  const stars = buildStars(glow);
+  const stars = buildStars(makeSparkleTexture());
   const dust = buildDust(glow);
   const planet = buildPlanet(glow);
   scene.add(stars, dust, planet);
@@ -194,7 +201,7 @@ export function createSpace(scene: THREE.Scene, renderer: THREE.WebGLRenderer): 
       scene.backgroundRotation.y += dt * 0.006;
       scene.environmentRotation.y += dt * 0.006;
       stars.rotation.y -= dt * 0.012;
-      planet.children[1]!.rotation.y += dt * 0.03;
+      planet.children[2]!.rotation.y += dt * 0.03;
       for (let i = 0; i < DUST_COUNT; i++) {
         let z = dustPos.getZ(i) - dt * 1.2;
         if (z < -DUST_BOX.z) z += DUST_BOX.z * 2;

@@ -7,14 +7,17 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { goalRow } from '../board';
 import type { GameState, Pos, WallSpec } from '../types';
 import type { Rarity } from '../abilities';
-import { CINEMA_SHADER, glowMaterial, makeGlowTexture } from './fx';
+import { CINEMA_SHADER, OUTLINE_COLOR, glowMaterial, makeGlowTexture, makeToonGradient, outlineMesh } from './fx';
 import { IMPACT_TAIL_MS, impactFrame } from './impact';
 import { cellToWorld, wallToWorld, worldToBoard } from './layout';
 import { createSpace } from './space';
 import type { Space } from './space';
 
 const BASE_FOV = 45;
-const BASE_BLOOM = 0.55;
+const BASE_BLOOM = 0.38;
+/** 黒縁の太さ（ワールドの長さ） */
+const OUTLINE_PAWN = 0.045;
+const OUTLINE_WALL = 0.035;
 
 const PLAYER_COLORS = [0x38d9ff, 0xff4fb8] as const;
 const WALL_LENGTH = 1.9;
@@ -55,11 +58,8 @@ export class BoardView {
     h: new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK),
     v: new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH),
   };
-  private readonly wallEdgeGeo = {
-    h: new THREE.EdgesGeometry(new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK)),
-    v: new THREE.EdgesGeometry(new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH)),
-  };
-  private readonly wallMats = new Map<number, { shell: THREE.MeshBasicMaterial; edge: THREE.LineBasicMaterial }>();
+  private readonly toon = makeToonGradient();
+  private readonly wallMats = new Map<string, { solid: THREE.MeshToonMaterial; halo: THREE.MeshBasicMaterial }>();
   private ghost: THREE.Group;
   private readonly container: HTMLElement;
 
@@ -69,12 +69,12 @@ export class BoardView {
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 1.1;
     container.appendChild(this.renderer.domElement);
 
     this.space = createSpace(this.scene, this.renderer);
-    this.scene.add(new THREE.AmbientLight(0x7080b8, 0.5));
-    const key = new THREE.DirectionalLight(0xdde8ff, 1.4);
+    this.scene.add(new THREE.AmbientLight(0xb8c4ff, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
     key.position.set(-6, 10, 6);
     this.scene.add(key);
 
@@ -142,64 +142,83 @@ export class BoardView {
         this.scene.add(tile);
       }
     }
-    // 光る格子線
+    // 格子線は、アニメ調の太い黒線（マスの境目）
     const half = this.size / 2;
-    const pts: number[] = [];
+    const gridMat = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, toneMapped: false });
+    const lineThick = 0.075;
     for (let i = 0; i <= this.size; i++) {
       const t = i - half;
-      pts.push(-half, 0.005, t, half, 0.005, t, t, 0.005, -half, t, 0.005, half);
+      const across = new THREE.Mesh(new THREE.BoxGeometry(this.size, 0.012, lineThick), gridMat);
+      across.position.set(0, 0.006, t);
+      const down = new THREE.Mesh(new THREE.BoxGeometry(lineThick, 0.012, this.size), gridMat);
+      down.position.set(t, 0.006, 0);
+      this.scene.add(across, down);
     }
-    const lineGeo = new THREE.BufferGeometry();
-    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    this.scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x7fb0ff, transparent: true, opacity: 0.8 })));
-    // 縁は、細い光の線だけにする（ソリッドな枠にしない）
-    const rimMat = glowMaterial(0x9cc0ff, 0.9);
-    const edge = this.size + 0.06;
-    const rims: [number, number, number, number][] = [
-      [edge, 0.04, 0, half],
-      [edge, 0.04, 0, -half],
-      [0.04, edge, half, 0],
-      [0.04, edge, -half, 0],
-    ];
-    for (const [w, d, px, pz] of rims) {
-      const rim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), rimMat);
-      rim.position.set(px, 0, pz);
-      this.scene.add(rim);
+    // 縁は、太い黒縁の中に、細い光の線（光る表現は残す）
+    const rimGlow = glowMaterial(0xbcd4ff, 0.95);
+    const long = this.size + 0.2;
+    for (const horizontal of [true, false]) {
+      for (const side of [1, -1]) {
+        const px = horizontal ? 0 : side * half;
+        const pz = horizontal ? side * half : 0;
+        const black = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? long : 0.2, 0.05, horizontal ? 0.2 : long), gridMat);
+        black.position.set(px, 0, pz);
+        const glow = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? long : 0.045, 0.02, horizontal ? 0.045 : long), rimGlow);
+        glow.position.set(horizontal ? 0 : px - side * 0.04, 0.03, horizontal ? pz - side * 0.04 : 0);
+        this.scene.add(black, glow);
+      }
     }
   }
 
-  /** コマ。ソリッドな球ではなく、光の核・ぼんやりした殻・暈・回る輪で、エネルギー体のように見せる */
+  /**
+   * コマ。アニメ調: トゥーン（3 段の影）の球に、黒縁と、白いハイライト（光の点）。
+   * 光る表現は残し、ぼんやりした暈（ハロ）と、回る輪（黒縁つき）を重ねる。
+   */
   private makePawn(color: number): THREE.Group {
     const g = new THREE.Group();
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.12, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.27, 28, 18), glowMaterial(color, 0.22));
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.26, 32, 22), new THREE.MeshToonMaterial({ color, gradientMap: this.toon }));
+    const hull = outlineMesh(new THREE.SphereGeometry(0.26, 32, 22), OUTLINE_PAWN);
+    // 左上に、白いハイライト（アニメの目のような光の点）
+    const spot = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
+    spot.position.set(-0.1, 0.12, 0.16);
+    spot.scale.set(1.3, 0.8, 0.5);
+    spot.rotation.z = 0.6;
     const halo = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: this.glow, color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.SpriteMaterial({ map: this.glow, color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    halo.scale.set(1.7, 1.7, 1);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.012, 8, 56), glowMaterial(color, 0.9));
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = -0.27;
-    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.008, 8, 56), glowMaterial(color, 0.35));
-    ring2.rotation.x = Math.PI / 2;
-    ring2.position.y = -0.27;
-    g.add(core, shell, halo, ring, ring2);
-    this.pawnRings.push(ring, ring2);
+    halo.scale.set(1.5, 1.5, 1);
+    const ringBlack = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.036, 8, 56), new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, toneMapped: false }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.016, 8, 56), glowMaterial(color, 1));
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.01, 8, 56), glowMaterial(color, 0.5));
+    for (const r of [ringBlack, ring, ring2]) {
+      r.rotation.x = Math.PI / 2;
+      r.position.y = -0.27;
+    }
+    ring.position.y = -0.265;
+    g.add(hull, body, spot, halo, ringBlack, ring, ring2);
+    this.pawnRings.push(ringBlack, ring, ring2);
     return g;
   }
 
-  /** 壁。ソリッドな板ではなく、半透明の光の障壁と、明るい縁の線 */
+  /**
+   * 壁。アニメ調: トゥーンの色の塊に黒縁。外側に、ぼんやり光る暈を重ねる（光る表現は残す）。
+   * ghost（置く前の予告）は、半透明にする。
+   */
   private makeWall(o: 'h' | 'v', color: number): THREE.Group {
-    let mats = this.wallMats.get(color);
+    const ghost = color !== WALL_COLOR;
+    const key = `${color}:${ghost}`;
+    let mats = this.wallMats.get(key);
     if (!mats) {
       mats = {
-        shell: glowMaterial(color, 0.26),
-        edge: new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1, toneMapped: false }),
+        solid: new THREE.MeshToonMaterial({ color, gradientMap: this.toon, transparent: ghost, opacity: ghost ? 0.7 : 1 }),
+        halo: glowMaterial(color, ghost ? 0.18 : 0.22),
       };
-      this.wallMats.set(color, mats);
+      this.wallMats.set(key, mats);
     }
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(this.wallGeo[o], mats.shell), new THREE.LineSegments(this.wallEdgeGeo[o], mats.edge));
+    const halo = new THREE.Mesh(this.wallGeo[o], mats.halo);
+    halo.scale.set(o === 'h' ? 1.05 : 3, 1.5, o === 'h' ? 3 : 1.05);
+    g.add(outlineMesh(this.wallGeo[o], OUTLINE_WALL), new THREE.Mesh(this.wallGeo[o], mats.solid), halo);
     return g;
   }
 
@@ -224,10 +243,12 @@ export class BoardView {
     this.markerGroup.clear();
     const color = PLAYER_COLORS[state.turn] as number;
     for (const m of legalMoves) {
-      const marker = new THREE.Mesh(
-        new THREE.RingGeometry(0.22, 0.28, 40),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
+      // 動ける先の目印: 黒縁つきの色の輪
+      const marker = new THREE.Group();
+      const black = new THREE.Mesh(new THREE.RingGeometry(0.19, 0.31, 40), new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.DoubleSide, toneMapped: false }));
+      const colored = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.28, 40), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, toneMapped: false }));
+      colored.position.z = 0.002; // 回した後の上向き（ワールドの y）が、輪の局所の z
+      marker.add(black, colored);
       marker.rotation.x = -Math.PI / 2;
       const w = cellToWorld(this.size, m.x, m.y);
       marker.position.set(w.x, 0.02, w.z);
@@ -245,6 +266,13 @@ export class BoardView {
     this.ghost = this.makeWall(wall.o, valid ? 0x4dff9a : 0xff4d4d);
     this.placeWall(this.ghost, wall);
     this.scene.add(this.ghost);
+  }
+
+  /** 盤の上の位置（ワールドの x, z）が、画面のどこに見えるか（画面の左上からの px）。擬音を出す位置に使う */
+  project(wx: number, wz: number): { x: number; y: number } {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const v = new THREE.Vector3(wx, 0.3, wz).project(this.camera);
+    return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
   }
 
   /** 画面上の位置を、盤の座標に直す。盤の平面に当たらなければ null */
