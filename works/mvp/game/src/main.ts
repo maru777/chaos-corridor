@@ -70,7 +70,6 @@ let novaFirst: Pos | null = null;
 /** 短い壁（三連壁）を置くモードか。短い壁を持っているときだけ切り替えられる */
 let shortMode = false;
 /** 手札を見ているか（手番が替わると、また伏せる）。相手に見せないための決まり */
-let handRevealed = false;
 let lastTurn: PlayerId = 0;
 /** デバッグ: 手札を、全部見えるようにする */
 let debugShowAll = false;
@@ -182,7 +181,7 @@ function div(className: string, text?: string): HTMLDivElement {
   return d;
 }
 
-/** 手札。ふだんは伏せて（裏向きで枚数だけ）、手番の人が「手札を見る」を押したときだけ、カードが見える。相手の手札は、枚数だけ */
+/** 手札。手番の人の手札は、いつも見える。相手の手札は、枚数だけ（上のプレイヤーカード） */
 function renderHand(): void {
   abilitiesEl.replaceChildren();
   handDescEl.textContent = '';
@@ -202,23 +201,7 @@ function renderHand(): void {
     abilitiesEl.appendChild(div('hand-hint', '使える能力は、もうない'));
     return;
   }
-  const cards = visibleCards(state, state.turn, handRevealed, debugShowAll);
-  if (cards === null) {
-    // 伏せた手札: 裏向きのカードと、見るためのボタン
-    for (let i = 0; i < count; i++) abilitiesEl.appendChild(div('card-back'));
-    const row = div('reveal-row');
-    const reveal = document.createElement('button');
-    reveal.className = 'hand-btn primary';
-    reveal.textContent = '手札を見る';
-    reveal.addEventListener('click', () => {
-      if (busy) return;
-      handRevealed = true;
-      refresh();
-    });
-    row.append(reveal, div('hand-hint', '相手に見えないように'));
-    abilitiesEl.appendChild(row);
-    return;
-  }
+  const cards = visibleCards(state, state.turn, true, debugShowAll) ?? [];
   // 今の盤で、実際に使える技（使える行動が 1 つでもあるもの）
   const usable = new Set<AbilityId>();
   for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
@@ -251,17 +234,6 @@ function renderHand(): void {
       useAbility(id);
     });
     abilitiesEl.appendChild(b);
-  }
-  if (!debugShowAll) {
-    const hide = document.createElement('button');
-    hide.className = 'hand-btn';
-    hide.textContent = '手札を隠す';
-    hide.addEventListener('click', () => {
-      if (busy) return;
-      handRevealed = false;
-      refresh();
-    });
-    abilitiesEl.appendChild(hide);
   }
 }
 
@@ -347,7 +319,6 @@ function useAbility(id: AbilityId): void {
 function refresh(): void {
   // 手番が替わったら、手札をまた伏せる（前の人の手札が、次の人に見えないように）
   if (state.turn !== lastTurn) {
-    handRevealed = false;
     lastTurn = state.turn;
   }
   ghost = null;
@@ -546,7 +517,6 @@ function resetGame(): void {
   state = newGame(seed);
   log = [];
   mode = 'move';
-  handRevealed = false;
   lastTurn = state.turn;
   say('');
   refresh();
@@ -649,7 +619,6 @@ const shell = createShell({
   skipOpening: params.has('skip') || params.has('debug'),
   onSlam: playTitleSfx,
   onStart: () => {
-    handRevealed = false;
     refresh();
   },
   onRestart: resetGame,

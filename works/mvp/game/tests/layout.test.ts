@@ -45,3 +45,63 @@ describe('座標変換', () => {
     expect(nearestWallSlot(9, 20, -3)).toEqual({ x: 7, y: 0 });
   });
 });
+
+import { cameraRig, projectBoard, safeArea } from '../src/view/layout';
+
+describe('カメラ: 盤を、安全な範囲いっぱいに大きく', () => {
+  const aspects = [0.46, 0.56, 0.75, 0.99, 1.0, 1.33, 1.78, 2.2];
+
+  it('どの縦横比でも、盤の四隅（縁の外側まで）が、安全な範囲に収まる（はみ出さない）', () => {
+    for (const aspect of aspects) {
+      const rig = cameraRig(aspect);
+      const safe = safeArea(aspect);
+      for (const p of projectBoard(rig.pos, aspect)) {
+        expect(Math.abs(p.x)).toBeLessThanOrEqual(safe.x + 1e-6);
+        const y = p.y + rig.shiftNdc;
+        expect(y).toBeLessThanOrEqual(safe.top + 1e-6);
+        expect(y).toBeGreaterThanOrEqual(safe.bottom - 1e-6);
+      }
+    }
+  });
+
+  it('できるだけ大きい（横か縦の、どちらかが、安全な範囲を 98% 以上使う）', () => {
+    for (const aspect of aspects) {
+      const rig = cameraRig(aspect);
+      const safe = safeArea(aspect);
+      const pts = projectBoard(rig.pos, aspect);
+      const w = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
+      const h = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
+      const useW = w / (2 * safe.x);
+      const useH = h / (safe.top - safe.bottom);
+      expect(Math.max(useW, useH)).toBeGreaterThan(0.98);
+    }
+  });
+
+  it('縦長（スマホ）の盤は、横幅の 85% 以上を使う', () => {
+    for (const aspect of [0.46, 0.56, 0.75]) {
+      const rig = cameraRig(aspect);
+      const pts = projectBoard(rig.pos, aspect);
+      const w = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
+      expect(w / 2).toBeGreaterThan(0.85);
+    }
+  });
+
+  it('横長（パソコン）の盤は、高さの 50% 以上を使う', () => {
+    for (const aspect of [1.33, 1.78, 2.2]) {
+      const rig = cameraRig(aspect);
+      const pts = projectBoard(rig.pos, aspect);
+      const h = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
+      expect(h / 2).toBeGreaterThan(0.5);
+    }
+  });
+
+  it('値が有限で、カメラは盤の上（y が正）、手前（z が正）にある', () => {
+    for (const aspect of aspects) {
+      const rig = cameraRig(aspect);
+      expect(rig.pos.every(Number.isFinite)).toBe(true);
+      expect(Number.isFinite(rig.shiftNdc)).toBe(true);
+      expect(rig.pos[1]).toBeGreaterThan(0);
+      expect(rig.pos[2]).toBeGreaterThan(0);
+    }
+  });
+});

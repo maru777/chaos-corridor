@@ -51,3 +51,91 @@ export function nearestWallSlot(size: number, bx: number, by: number): Pos {
   const clamp = (v: number) => Math.min(size - 2, Math.max(0, v));
   return { x: clamp(Math.round(bx - 0.5)), y: clamp(Math.round(by - 0.5)) };
 }
+
+// ---- カメラ: 盤が、画面の「安全な範囲」いっぱいに収まるように、距離と位置を計算で決める ----
+
+/** カメラの視野角（度）。board3d.ts と同じ */
+export const CAMERA_FOV = 45;
+
+/** 画面の座標（-1〜1。右と上が正）での、盤を置いてよい範囲。上の表示（プレイヤーカード）と、下の手札・ボタンを避ける */
+export interface SafeArea {
+  readonly x: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+export function safeArea(aspect: number): SafeArea {
+  // 縦長（スマホ）: 左右はほぼいっぱい。上は、プレイヤーカード（約 13%）、下は、手札とボタン（約 30%）を避ける
+  if (aspect < 1) return { x: 0.97, top: 0.74, bottom: -0.4 };
+  // 横長（パソコン）: プレイヤーカードは左右の隅にあるので、上は高く使える。下は、ボタン。手札は左下にあるので、横幅を絞る
+  return { x: 0.78, top: 0.5, bottom: -0.8 };
+}
+
+export interface CameraRig {
+  readonly pos: readonly [number, number, number];
+  readonly target: readonly [number, number, number];
+  /** 画面の中で、盤の絵を、上（正）か下（負）へずらす量（-1〜1 の座標） */
+  readonly shiftNdc: number;
+}
+
+const TARGET: readonly [number, number, number] = [0, 0, 0.3];
+
+/** 盤の四隅（縁の外側まで）を、カメラから見た画面の座標（-1〜1）にする */
+export function projectBoard(pos: readonly [number, number, number], aspect: number, size = 9): { x: number; y: number }[] {
+  const f = [TARGET[0] - pos[0], TARGET[1] - pos[1], TARGET[2] - pos[2]];
+  const fl = Math.hypot(f[0] as number, f[1] as number, f[2] as number);
+  const fx = (f[0] as number) / fl;
+  const fy = (f[1] as number) / fl;
+  const fz = (f[2] as number) / fl;
+  // 右 = 前 × 上(0,1,0)、上 = 右 × 前
+  let rx = fy * 0 - fz * 1;
+  let ry = fz * 0 - fx * 0;
+  let rz = fx * 1 - fy * 0;
+  const rl = Math.hypot(rx, ry, rz);
+  rx /= rl;
+  ry /= rl;
+  rz /= rl;
+  const ux = ry * fz - rz * fy;
+  const uy = rz * fx - rx * fz;
+  const uz = rx * fy - ry * fx;
+  const tan = Math.tan((CAMERA_FOV * Math.PI) / 360);
+  const half = size / 2 + 0.25;
+  return [
+    [-half, -half],
+    [half, -half],
+    [-half, half],
+    [half, half],
+  ].map(([x, z]) => {
+    const vx = (x as number) - pos[0];
+    const vy = 0 - pos[1];
+    const vz = (z as number) - pos[2];
+    const depth = vx * fx + vy * fy + vz * fz;
+    return { x: (vx * rx + vy * ry + vz * rz) / depth / (tan * aspect), y: (vx * ux + vy * uy + vz * uz) / depth / tan };
+  });
+}
+
+/** 画面の縦横比から、カメラの位置を決める。盤が、安全な範囲に、できるだけ大きく収まる距離を探す */
+export function cameraRig(aspect: number, size = 9): CameraRig {
+  const pitch = ((aspect < 1 ? 55 : 50) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
+  const safe = safeArea(aspect);
+  const at = (d: number): [number, number, number] => [TARGET[0], TARGET[1] + d * Math.sin(pitch), TARGET[2] + d * Math.cos(pitch)];
+  const extent = (d: number) => {
+    const pts = projectBoard(at(d), aspect, size);
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  };
+  const fits = (d: number) => {
+    const e = extent(d);
+    return e.w <= 2 * safe.x && e.h <= safe.top - safe.bottom;
+  };
+  let lo = 4;
+  let hi = 160;
+  for (let i = 0; i < 48; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  const e = extent(hi);
+  return { pos: at(hi), target: TARGET, shiftNdc: (safe.top + safe.bottom) / 2 - (e.minY + e.maxY) / 2 };
+}
