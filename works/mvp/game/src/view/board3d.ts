@@ -1,7 +1,13 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { goalRow } from '../board';
 import type { GameState, Pos, Wall } from '../types';
 import { cellToWorld, wallToWorld, worldToBoard } from './layout';
+import { createSpace } from './space';
+import type { Space } from './space';
 
 const PLAYER_COLORS = [0x38d9ff, 0xff4fb8] as const;
 const WALL_LENGTH = 1.9;
@@ -25,7 +31,9 @@ export class BoardView {
   private readonly markerGroup = new THREE.Group();
   private readonly pawns: THREE.Mesh[] = [];
   private readonly pawnTargets: THREE.Vector3[] = [];
-  private readonly stars: THREE.Points;
+  private readonly space: Space;
+  private readonly composer: EffectComposer;
+  private readonly bloom: UnrealBloomPass;
   private ghost: THREE.Mesh;
   private readonly container: HTMLElement;
 
@@ -34,18 +42,25 @@ export class BoardView {
     this.container = container;
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0x02030a);
-    this.scene.fog = new THREE.Fog(0x02030a, 25, 70);
-    this.scene.add(new THREE.AmbientLight(0x6070a0, 0.9));
-    const key = new THREE.PointLight(0xaaccff, 90, 60);
-    key.position.set(0, 12, 4);
+    this.space = createSpace(this.scene, this.renderer);
+    this.scene.add(new THREE.AmbientLight(0x7080b8, 0.5));
+    const key = new THREE.DirectionalLight(0xdde8ff, 1.4);
+    key.position.set(-6, 10, 6);
     this.scene.add(key);
 
     this.buildBoard();
-    this.stars = this.buildStars();
-    this.scene.add(this.stars, this.wallGroup, this.markerGroup);
+    this.scene.add(this.wallGroup, this.markerGroup);
+
+    // 光る物（壁・コマ・目印）がにじむ
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.9);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
 
     for (let p = 0; p < 2; p++) {
       const color = PLAYER_COLORS[p] as number;
@@ -78,46 +93,64 @@ export class BoardView {
   }
 
   private buildBoard(): void {
-    const tileGeo = new THREE.BoxGeometry(0.92, 0.1, 0.92);
+    // 宙に浮かぶガラス板。下の天の川が透けて、星空を映す
+    const tileGeo = new THREE.BoxGeometry(0.94, 0.08, 0.94);
     for (let y = 0; y < this.size; y++) {
       for (let x = 0; x < this.size; x++) {
-        let color = 0x141a38;
-        let emissive = 0x0a1030;
+        let color = 0x22408a;
+        let emissive = 0x0a1a48;
+        let opacity = 0.32;
         if (y === goalRow(this.size, 0)) {
-          color = 0x0d3a4d;
-          emissive = 0x0b4a63;
+          color = 0x1a8fb8;
+          emissive = 0x0a6a8a;
+          opacity = 0.55;
         } else if (y === goalRow(this.size, 1)) {
-          color = 0x4d0d3a;
-          emissive = 0x630b4a;
+          color = 0xb8208a;
+          emissive = 0x8a0a62;
+          opacity = 0.55;
         }
-        const tile = new THREE.Mesh(tileGeo, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.5, metalness: 0.4 }));
+        const mat = new THREE.MeshPhysicalMaterial({
+          color,
+          emissive,
+          emissiveIntensity: 0.6,
+          transparent: true,
+          opacity,
+          roughness: 0.05,
+          metalness: 0.2,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+          depthWrite: false,
+        });
+        const tile = new THREE.Mesh(tileGeo, mat);
         const w = cellToWorld(this.size, x, y);
-        tile.position.set(w.x, -0.05, w.z);
+        tile.position.set(w.x, -0.04, w.z);
         this.scene.add(tile);
       }
     }
-    const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(this.size + 0.6, 0.12, this.size + 0.6),
-      new THREE.MeshStandardMaterial({ color: 0x080c20, emissive: 0x101a48, roughness: 0.8 }),
-    );
-    frame.position.y = -0.14;
-    this.scene.add(frame);
-  }
-
-  private buildStars(): THREE.Points {
-    const count = 900;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const r = 40 + Math.random() * 40;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = Math.abs(r * Math.cos(phi)) * 0.8 - 6;
-      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    // 光る格子線
+    const half = this.size / 2;
+    const pts: number[] = [];
+    for (let i = 0; i <= this.size; i++) {
+      const t = i - half;
+      pts.push(-half, 0.005, t, half, 0.005, t, t, 0.005, -half, t, 0.005, half);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    return new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xcfe0ff, size: 0.35, sizeAttenuation: true, fog: false }));
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x7fb0ff, transparent: true, opacity: 0.8 })));
+    // 縁の光る枠
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x0a1030, emissive: 0x5a8cff, emissiveIntensity: 1.1, roughness: 0.3, metalness: 0.6 });
+    const edge = this.size + 0.2;
+    const rims: [number, number, number, number][] = [
+      [edge, 0.12, 0, half + 0.05],
+      [edge, 0.12, 0, -half - 0.05],
+      [0.1, edge, half + 0.05, 0],
+      [0.1, edge, -half - 0.05, 0],
+    ];
+    for (const [w, d, px, pz] of rims) {
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), rimMat);
+      rim.position.set(px, -0.04, pz);
+      this.scene.add(rim);
+    }
   }
 
   private makeWallMesh(o: 'h' | 'v', color: number): THREE.Mesh {
@@ -188,11 +221,14 @@ export class BoardView {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     this.renderer.setSize(w, h, false);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
     this.camera.aspect = w / h;
     // 縦長の画面（スマホ）では、盤が横幅いっぱいに収まるようにカメラを引き、真上に近い角度にして押しやすくする
     const portrait = this.camera.aspect < 1;
-    const k = Math.max(1, 0.92 / this.camera.aspect);
-    this.camera.position.set(0, (portrait ? 11.5 : 9.5) * k, (portrait ? 6 : 10) * k);
+    const k = Math.max(1, (portrait ? 0.98 : 0.92) / this.camera.aspect);
+    // 横長は低めの角度にして、奥に天の川が見えるようにする
+    this.camera.position.set(0, (portrait ? 10.5 : 7.5) * k, (portrait ? 9.5 : 11.5) * k);
     this.camera.lookAt(0, 0, 0.3);
     this.camera.updateProjectionMatrix();
   }
@@ -205,7 +241,7 @@ export class BoardView {
     }
     const pulse = 1 + Math.sin(time / 250) * 0.12;
     for (const m of this.markerGroup.children) m.scale.setScalar(pulse);
-    this.stars.rotation.y = time / 200000;
-    this.renderer.render(this.scene, this.camera);
+    this.space.update(time);
+    this.composer.render();
   }
 }

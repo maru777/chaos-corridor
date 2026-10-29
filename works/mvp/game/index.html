@@ -29,6 +29,8 @@
       button:disabled { opacity: 0.4; cursor: default; }
       #hash { font-size: 11px; opacity: 0.55; }
       #msg-panel:has(#msg:empty) { display: none; }
+      #credit { position: fixed; left: 8px; bottom: calc(2px + env(safe-area-inset-bottom)); font-size: 10px; color: rgba(200, 215, 255, 0.55); text-decoration: none; z-index: 5; }
+      #credit:hover { color: #fff; }
     </style>
   </head>
   <body>
@@ -45,6 +47,7 @@
       <button id="btn-reset">最初から</button>
       <span id="hash" class="panel"></span>
     </div>
+    <a id="credit" href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">Milky Way panorama: ESO/S. Brunier (CC BY 4.0) — resized</a>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
