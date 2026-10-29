@@ -23,12 +23,13 @@ function withAbilities(first: AbilityId[], second: AbilityId[], patch: Partial<G
 }
 
 describe('能力のデータ', () => {
-  it('漢字の名前・読み・レア度・説明がそろっていて、id が重ならない', () => {
+  it('技名は漫画のような「XXXのYYY」の漢字、読みは英語 2 語。説明とレア度もそろっていて、id と名前が重ならない', () => {
     const ids = new Set(ABILITIES.map((a) => a.id));
     expect(ids.size).toBe(ABILITIES.length);
+    expect(new Set(ABILITIES.map((a) => a.name)).size).toBe(ABILITIES.length);
     for (const a of ABILITIES) {
-      expect(a.name).toMatch(/^[一-鿿]+$/);
-      expect(a.reading.length).toBeGreaterThan(0);
+      expect(a.name).toMatch(/^[一-鿿]{1,3}の[一-鿿]{1,3}$/);
+      expect(a.reading).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
       expect(a.text.length).toBeGreaterThan(0);
       expect(RARITY_WEIGHT[a.rarity]).toBeGreaterThan(0);
     }

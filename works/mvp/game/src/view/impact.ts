@@ -1,8 +1,10 @@
 import type { Rarity } from '../abilities';
+import { THUNDER_HITS_MS } from './bolt';
 
 /**
  * 能力を使ったときの、3D 画面側の演出の強さ（光のにじみ・ズーム・揺れ・スロー）を、時間から計算する。
  * 描画から切り離した計算だけなので、テストできる。レア度が高いほど派手になる。
+ * LEGENDARY は、最初に雷が 3 発落ちる（THUNDER_HITS_MS）ので、そのたびに画面が揺れて光る。
  */
 
 export interface ImpactFrame {
@@ -31,8 +33,13 @@ export const IMPACT_PROFILES: Readonly<Record<Rarity, Profile>> = {
   UNCOMMON: { glow: 0.3, glowDur: 300, zoom: 0, zoomBuildUp: false, shake: 0, shakeDur: 0 },
   RARE: { glow: 0.6, glowDur: 400, zoom: 1.5, zoomBuildUp: false, shake: 0, shakeDur: 0 },
   EPIC: { glow: 1.0, glowDur: 500, zoom: 3, zoomBuildUp: false, shake: 0.12, shakeDur: 500 },
-  LEGENDARY: { glow: 1.8, glowDur: 800, zoom: 8, zoomBuildUp: true, shake: 0.22, shakeDur: 700, slow: { factor: 0.25, extraMs: 500 } },
+  LEGENDARY: { glow: 1.4, glowDur: 800, zoom: 8, zoomBuildUp: true, shake: 0.18, shakeDur: 700, slow: { factor: 0.25, extraMs: 500 } },
 };
+
+/** 雷の 1 発ごとの、揺れの大きさ（だんだん強く。最後の特大の 1 発がいちばん強い） */
+const THUNDER_SHAKE = [0.12, 0.17, 0.23, 0.42] as const;
+const THUNDER_SHAKE_DUR_MS = 350;
+const THUNDER_GLOW = 1.1;
 
 /** この時間を過ぎたら、演出は終わり（すべて 0 に戻る） */
 export const IMPACT_TAIL_MS = 1600;
@@ -53,15 +60,26 @@ function smooth(t: number): number {
  */
 export function impactFrame(rarity: Rarity, elapsedMs: number, impactMs: number, reduced = false): ImpactFrame {
   const p = IMPACT_PROFILES[rarity];
-  const glow = p.glow * pulse(elapsedMs, impactMs - 100, p.glowDur);
+  let glow = p.glow * pulse(elapsedMs, impactMs - 100, p.glowDur);
+  let shake = 0;
+
+  const shakeT = elapsedMs - impactMs;
+  if (p.shakeDur > 0 && shakeT >= 0 && shakeT < p.shakeDur) shake = p.shake * (1 - shakeT / p.shakeDur);
+
+  if (rarity === 'LEGENDARY') {
+    THUNDER_HITS_MS.forEach((hit, i) => {
+      const t = elapsedMs - hit;
+      if (t >= 0 && t < THUNDER_SHAKE_DUR_MS) shake = Math.max(shake, (THUNDER_SHAKE[i] ?? 0.2) * (1 - t / THUNDER_SHAKE_DUR_MS));
+      glow = Math.max(glow, THUNDER_GLOW * pulse(elapsedMs, hit - 40, 300));
+    });
+  }
+
   if (reduced) return { glow: glow * 0.3, zoomDeg: 0, shake: 0, timeScale: 1 };
 
   let z: number;
   if (p.zoomBuildUp) z = elapsedMs < impactMs ? smooth(elapsedMs / impactMs) : Math.max(0, 1 - (elapsedMs - impactMs) / 600);
   else z = pulse(elapsedMs, impactMs - 100, 500);
 
-  const shakeT = elapsedMs - impactMs;
-  const shake = p.shakeDur > 0 && shakeT >= 0 && shakeT < p.shakeDur ? p.shake * (1 - shakeT / p.shakeDur) : 0;
   const slowing = p.slow !== undefined && elapsedMs < impactMs + p.slow.extraMs;
   return { glow, zoomDeg: p.zoom * z, shake, timeScale: slowing && p.slow ? p.slow.factor : 1 };
 }

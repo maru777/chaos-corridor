@@ -1,7 +1,7 @@
 import type { Rarity } from '../abilities';
 
 /**
- * カットインの「電気が走る」稲妻の形と出るタイミングを決める。描画から切り離した計算だけなので、テストできる。
+ * 雷（LEGENDARY の属性）の稲妻の形とタイミングを決める。描画から切り離した計算だけなので、テストできる。
  * 稲妻は、線の中点を少しずつずらしていく方法（中点変位）でギザギザにする。
  */
 
@@ -57,47 +57,70 @@ export interface BoltLayout {
   readonly bandHeight: number;
 }
 
-/** 稲妻の本数。レア度が高いほど多い */
-export const BOLT_COUNT: Readonly<Record<Rarity, number>> = {
-  UNCOMMON: 4,
-  RARE: 8,
-  EPIC: 16,
-  LEGENDARY: 30,
-};
-
 /**
- * 稲妻を計画する。
- * - 帯の縁を走る稲妻（全レア度）
- * - 画面の上下から帯へ落ちる稲妻（EPIC 以上）
- * 見せ場（impactMs）の少し前から、終わりに向けて、見せ場の近くほど多く光る。
+ * 雷が落ちる時刻（カットインが始まってから）。「ドドドン」の 3 発と、最後の特大の 1 発。
+ * 3D の揺れ・効果音も、これに合わせる。帯は、これが全部終わってから出る。
  */
-export function planBolts(rarity: Rarity, rng: () => number, layout: BoltLayout, totalMs: number, impactMs: number): BoltSpec[] {
-  const out: BoltSpec[] = [];
-  const strikes = rarity === 'EPIC' || rarity === 'LEGENDARY';
+export const THUNDER_HITS_MS: readonly number[] = [150, 420, 690, 1100];
+
+/** 雷が落ちる位置（画面の幅に対する割合）。中央付近 */
+const THUNDER_X: readonly number[] = [0.5, 0.4, 0.6, 0.5];
+
+export interface StrikeSpec {
+  readonly main: BoltSpec;
+  readonly branches: readonly BoltSpec[];
+  /** 画面が光る時刻 */
+  readonly flashDelayMs: number;
+}
+
+export interface ThunderPlan {
+  /** 最初に、画面の中央へ落ちる大きな雷（3 発。だんだん太く） */
+  readonly strikes: readonly StrikeSpec[];
+  /** そのあと、帯の縁を走る小さな電気 */
+  readonly crackles: readonly BoltSpec[];
+}
+
+const CRACKLE_COUNT = 14;
+
+/** 雷の計画。大きな雷は、画面の中央付近に、上から落ちる */
+export function planThunder(rng: () => number, layout: BoltLayout, totalMs: number, impactMs: number): ThunderPlan {
+  const landY = layout.height * 0.5;
+  const last = THUNDER_HITS_MS.length - 1;
+  const strikes = THUNDER_HITS_MS.map((t, i): StrikeSpec => {
+    const x = (THUNDER_X[i] ?? 0.5) * layout.width;
+    const from = { x: x + (rng() - 0.5) * layout.width * 0.06, y: -20 };
+    const to = { x: x + (rng() - 0.5) * layout.width * 0.04, y: landY };
+    const points = boltPoints(rng, from, to, 6, layout.width * 0.06 + 12);
+    // 最後の 1 発は、特別に太く長い
+    const main: BoltSpec = { d: pointsToPath(points), delayMs: t, durMs: i === last ? 650 : 420, width: i === last ? 16 : 5 + i * 2 };
+    const branches = [0, 1].map((): BoltSpec => {
+      const p = points[Math.floor(points.length * (0.35 + rng() * 0.4))] as Point;
+      const dir = rng() < 0.5 ? -1 : 1;
+      const end = { x: p.x + dir * layout.width * (0.15 + rng() * 0.2), y: p.y + layout.height * (0.05 + rng() * 0.1) };
+      return { d: pointsToPath(boltPoints(rng, p, end, 4, layout.width * 0.025)), delayMs: t + 30, durMs: 340, width: 2.5 };
+    });
+    return { main, branches, flashDelayMs: t };
+  });
+
   const span = Math.max(1, (totalMs - impactMs) * 0.75);
-  for (let i = 0; i < BOLT_COUNT[rarity]; i++) {
-    const delayMs = Math.max(0, impactMs - 250 + Math.pow(rng(), 1.6) * span);
-    const durMs = 160 + rng() * 160;
-    let from: Point;
-    let to: Point;
-    let jitter: number;
-    let width: number;
-    if (strikes && rng() < 0.45) {
-      const x = rng() * layout.width;
-      from = rng() < 0.6 ? { x, y: 0 } : { x, y: layout.height };
-      to = { x: x + (rng() - 0.5) * layout.width * 0.3, y: layout.bandTop + layout.bandHeight * (0.2 + rng() * 0.6) };
-      jitter = layout.width * 0.05 + 10;
-      width = 2 + rng() * 2.5;
-    } else {
-      const y = rng() < 0.5 ? layout.bandTop : layout.bandTop + layout.bandHeight;
-      const len = layout.width * (0.18 + rng() * 0.3);
-      const x0 = rng() * (layout.width - len);
-      from = { x: x0, y: y + (rng() - 0.5) * 8 };
-      to = { x: x0 + len, y: y + (rng() - 0.5) * 8 };
-      jitter = layout.bandHeight * 0.18 + 6;
-      width = 1.5 + rng() * 1.5;
-    }
-    out.push({ d: pointsToPath(boltPoints(rng, from, to, 5, jitter)), delayMs, durMs, width });
+  const crackles: BoltSpec[] = [];
+  for (let i = 0; i < CRACKLE_COUNT; i++) {
+    const y = rng() < 0.5 ? layout.bandTop : layout.bandTop + layout.bandHeight;
+    const len = layout.width * (0.18 + rng() * 0.3);
+    const x0 = rng() * (layout.width - len);
+    const from = { x: x0, y: y + (rng() - 0.5) * 8 };
+    const to = { x: x0 + len, y: y + (rng() - 0.5) * 8 };
+    crackles.push({
+      d: pointsToPath(boltPoints(rng, from, to, 5, layout.bandHeight * 0.18 + 6)),
+      delayMs: Math.max(0, impactMs - 250 + Math.pow(rng(), 1.6) * span),
+      durMs: 160 + rng() * 160,
+      width: 1.5 + rng() * 1.5,
+    });
   }
-  return out;
+  return { strikes, crackles };
+}
+
+/** 雷を使うのは LEGENDARY だけ */
+export function usesThunder(rarity: Rarity): boolean {
+  return rarity === 'LEGENDARY';
 }

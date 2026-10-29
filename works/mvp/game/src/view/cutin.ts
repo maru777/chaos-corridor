@@ -1,10 +1,12 @@
 import type { Rarity } from '../abilities';
-import { createRng } from '../rng';
-import { planBolts } from './bolt';
+import { buildElementLayers } from './elements';
+import { ELEMENT_OF } from './fxplan';
 
 /**
  * 能力を使ったときのカットイン（画面いっぱいの文字の演出）。HTML と CSS で作る。
- * レア度が高いほど、長く・大きく・派手になる。名前が読めるよう、見せ場のあとも 1.2 秒以上は画面に残す。
+ * レア度が高いほど、長く・大きく・派手になり、レア度ごとに色と属性が変わる。
+ *   UNCOMMON = 風（緑）、RARE = 水（青）、EPIC = 闇（紫）、LEGENDARY = 雷（金）。
+ * 名前が読めるよう、見せ場のあとも 1.2 秒以上は画面に残す。
  * 見た目は index.html の `.cutin` の CSS にある。ここは要素を作って、終わったら消すだけ。
  */
 
@@ -15,16 +17,19 @@ export interface CutInTiming {
   readonly impactMs: number;
   /** 飛び散る粒の数 */
   readonly particles: number;
+  /** 帯が出始めるまでの時間（LEGENDARY は、先に雷が落ちる） */
+  readonly bandDelayMs: number;
 }
 
 export const CUTIN_TIMING: Readonly<Record<Rarity, CutInTiming>> = {
-  UNCOMMON: { totalMs: 1800, impactMs: 400, particles: 0 },
-  RARE: { totalMs: 2400, impactMs: 600, particles: 0 },
-  EPIC: { totalMs: 3200, impactMs: 850, particles: 36 },
-  LEGENDARY: { totalMs: 4600, impactMs: 1500, particles: 80 },
+  UNCOMMON: { totalMs: 1800, impactMs: 400, particles: 0, bandDelayMs: 0 },
+  RARE: { totalMs: 2400, impactMs: 600, particles: 0, bandDelayMs: 0 },
+  EPIC: { totalMs: 3200, impactMs: 850, particles: 36, bandDelayMs: 0 },
+  // 雷が「ドドドン」と落ちきってから（約 1.7 秒）帯が出て、そのあとで名前が決まる
+  LEGENDARY: { totalMs: 5800, impactMs: 2500, particles: 80, bandDelayMs: 1750 },
 };
 
-/** 帯の高さ（px）。CSS の変数にも渡し、稲妻の位置の計算にも使う */
+/** 帯の高さ（px）。CSS の変数にも渡し、演出の位置の計算にも使う */
 export const BAND_HEIGHT_PX: Readonly<Record<Rarity, number>> = {
   UNCOMMON: 86,
   RARE: 124,
@@ -39,11 +44,11 @@ export interface CutInOptions {
   readonly name: string;
   readonly reading: string;
   readonly rarity: Rarity;
-  /** 使った人（色が変わる） */
+  /** 使った人 */
   readonly player: 0 | 1;
 }
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+const PLAYER_LABEL = ['先手', '後手'] as const;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -52,49 +57,29 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return e;
 }
 
-/** 電気（稲妻）。太い光の線と、細い白い芯の 2 本を重ねる */
-function buildBolts(rarity: Rarity, timing: CutInTiming): SVGSVGElement {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('class', 'cutin-bolts');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  const specs = planBolts(
-    rarity,
-    createRng(Math.floor(Math.random() * 0xffffffff)),
-    { width: w, height: h, bandTop: h * BAND_TOP_RATIO, bandHeight: BAND_HEIGHT_PX[rarity] },
-    timing.totalMs,
-    timing.impactMs,
-  );
-  for (const s of specs) {
-    const g = document.createElementNS(SVG_NS, 'g');
-    g.setAttribute('class', 'bolt');
-    g.style.setProperty('--bd', `${Math.round(s.durMs)}ms`);
-    g.style.setProperty('--bdelay', `${Math.round(s.delayMs)}ms`);
-    for (const kind of ['glow', 'core'] as const) {
-      const path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('class', `bolt-${kind}`);
-      path.setAttribute('d', s.d);
-      path.setAttribute('stroke-width', String(kind === 'glow' ? s.width * 3 : s.width));
-      g.appendChild(path);
-    }
-    svg.appendChild(g);
-  }
-  return svg;
-}
-
 /** カットインを出し、終わったら消して、約束（Promise）を果たす */
 export function playCutIn(container: HTMLElement, opts: CutInOptions): Promise<void> {
   const timing = CUTIN_TIMING[opts.rarity];
-  const root = el('div', `cutin ${opts.rarity.toLowerCase()}`);
+  const element = ELEMENT_OF[opts.rarity];
+  const root = el('div', `cutin ${opts.rarity.toLowerCase()} el-${element.id}`);
   root.dataset['player'] = String(opts.player);
   root.style.setProperty('--dur', `${timing.totalMs}ms`);
   root.style.setProperty('--impact', `${timing.impactMs}ms`);
+  root.style.setProperty('--band-delay', `${timing.bandDelayMs}ms`);
   root.style.setProperty('--band-h', `${BAND_HEIGHT_PX[opts.rarity]}px`);
+  root.style.setProperty('--chars', String(Math.max(2, opts.name.length)));
 
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const layers = buildElementLayers(opts.rarity, timing, { width: w, height: h, bandTop: h * BAND_TOP_RATIO, bandHeight: BAND_HEIGHT_PX[opts.rarity] });
+
+  // 上の行: 使った人（その人の色）・レア度・属性
+  const tag = el('span', 'cutin-rarity');
+  tag.append(el('span', 'cutin-player', PLAYER_LABEL[opts.player]), ` ・ ${opts.rarity} ・ ${element.label}`);
   const band = el('div', 'cutin-band');
-  band.append(el('span', 'cutin-rarity', opts.rarity), el('strong', 'cutin-name', opts.name), el('small', 'cutin-reading', `《${opts.reading}》`));
-  root.append(el('div', 'cutin-dim'), el('div', 'cutin-edge'), band, buildBolts(opts.rarity, timing), el('div', 'cutin-flash'));
+  band.append(tag, el('strong', 'cutin-name', opts.name), el('small', 'cutin-reading', `《${opts.reading}》`));
+
+  root.append(el('div', 'cutin-dim'), el('div', 'cutin-edge'), ...layers.back, band, ...layers.front, el('div', 'cutin-flash'));
 
   for (let i = 0; i < timing.particles; i++) {
     const p = el('span', 'cutin-p');

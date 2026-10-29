@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RARITIES } from '../src';
+import { THUNDER_HITS_MS } from '../src/view/bolt';
 import { IMPACT_TAIL_MS, impactFrame } from '../src/view/impact';
 
-const IMPACT = 1000;
+const IMPACT = 2500;
 
 describe('衝撃の演出の強さ', () => {
   it('どのレア度も、終わった後は全部 0（時間の進みは通常）に戻る', () => {
@@ -31,7 +32,9 @@ describe('衝撃の演出の強さ', () => {
 
   it('レア度が高いほど、衝撃の瞬間の光・揺れが強い', () => {
     const at = (r: (typeof RARITIES)[number]) => impactFrame(r, IMPACT + 1, IMPACT);
-    const glows = RARITIES.map((r) => at(r).glow);
+    // 光は、衝撃のまわりで最も強くなった値（ピーク）で比べる
+    const peak = (r: (typeof RARITIES)[number]) => Math.max(...Array.from({ length: 100 }, (_, i) => impactFrame(r, IMPACT - 100 + i * 10, IMPACT).glow));
+    const glows = RARITIES.map((r) => peak(r));
     expect(glows).toEqual([...glows].sort((a, b) => a - b));
     expect(new Set(glows).size).toBe(4);
     expect(at('UNCOMMON').shake).toBe(0);

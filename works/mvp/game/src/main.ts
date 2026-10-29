@@ -4,6 +4,7 @@ import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { nearestCell, nearestWallSlot } from './view/layout';
 import { playSfx } from './view/sfx';
+import { shout, stopVoice } from './view/voice';
 
 type Mode = 'move' | 'wall' | 'diagonal' | 'reclaim';
 
@@ -118,12 +119,15 @@ function renderAbilities(): void {
 }
 
 /** カットイン・効果音・3D の演出をまとめて出す。見せ場（impact）で onImpact を呼び、終わると操作を再開する */
-function runEffect(name: string, reading: string, rarity: Rarity, player: PlayerId, onImpact?: () => void): void {
+function runEffect(name: string, reading: string, rarity: Rarity, player: PlayerId, onImpact?: () => void, spoken?: string): void {
   const token = ++effectToken;
+  stopVoice();
   cutinsEl.replaceChildren(); // 演出中に出し直したときは、前の演出を消す
   busy = true;
   const timing = CUTIN_TIMING[rarity];
   playSfx(rarity, timing.impactMs / 1000);
+  // 技名を声に出す。名前が決まる少し前に始めると、決まる瞬間に重なる
+  shout(spoken ?? name, rarity, timing.impactMs - 150);
   view.playImpact(rarity, timing.impactMs);
   window.setTimeout(() => {
     if (token === effectToken) onImpact?.();
@@ -200,7 +204,7 @@ function play(action: Action): void {
       log = [...log, action];
     }
     const def = abilityDef(action.id);
-    runEffect(def.name, def.reading, rarityOverride ?? def.rarity, mover, refresh);
+    runEffect(def.name, def.reading, rarityOverride ?? def.rarity, mover, refresh, def.shout);
     return;
   }
   state = r.state;
@@ -287,6 +291,19 @@ btnReset.addEventListener('click', () => {
 // ・レア度ごとのカットインを、何回でも試せる（演出中でも押し直せる。対局には影響しない）
 // ・実際の能力を使ったときの演出のレア度を、好きなものに変えられる
 // ・能力を使っても減らさないようにできる（何回でも使える）
+/** デバッグで演出だけを試すときの、見本の技名（レア度ごと。「XXXのYYY」と英語 2 語） */
+const DEBUG_SAMPLES: Readonly<Record<Rarity, { name: string; reading: string }>> = {
+  UNCOMMON: { name: '疾風の双刃', reading: 'Gale Twin' },
+  RARE: { name: '蒼氷の螺旋', reading: 'Azure Spiral' },
+  EPIC: { name: '深淵の魔弾', reading: 'Abyss Bullet' },
+  LEGENDARY: { name: '終焉の雷霆', reading: 'Doom Thunder' },
+};
+
+function debugEffect(rarity: Rarity): void {
+  const s = DEBUG_SAMPLES[rarity];
+  runEffect(s.name, s.reading, rarity, state.turn);
+}
+
 function buildDebugPanel(): void {
   const panel = el('debug-panel');
   const btn = el<HTMLButtonElement>('btn-debug');
@@ -301,7 +318,7 @@ function buildDebugPanel(): void {
   RARITIES.forEach((rarity, i) => {
     const b = document.createElement('button');
     b.textContent = `${i + 1} ${rarity}`;
-    b.addEventListener('click', () => runEffect('混沌', 'ケイオス', rarity, state.turn));
+    b.addEventListener('click', () => debugEffect(rarity));
     previewRow.appendChild(b);
   });
 
@@ -333,7 +350,7 @@ function buildDebugPanel(): void {
   window.addEventListener('keydown', (e) => {
     if (panel.hidden) return;
     const rarity = RARITIES[Number(e.key) - 1];
-    if (rarity !== undefined) runEffect('混沌', 'ケイオス', rarity, state.turn);
+    if (rarity !== undefined) debugEffect(rarity);
   });
 }
 buildDebugPanel();

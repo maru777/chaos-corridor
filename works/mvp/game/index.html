@@ -43,30 +43,81 @@
       /* カットイン（能力を使ったときの演出）。レア度が高いほど、大きく・長く・派手になる */
       #cutins { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
       /* --band-h（帯の高さ）は cutin.ts が設定する。--dim は、画面を暗くする濃さ */
-      .cutin { position: absolute; inset: 0; overflow: hidden; --c: #38d9ff; --rc: #7fe0a0; --band-h: 86px; --dim: 0.5; --name-size: min(34px, 9vw); }
-      .cutin[data-player="1"] { --c: #ff4fb8; }
+      /* 色は、使った人（--pc）ではなく、レア度（--rc。--c は、その色に合わせた全体の色）で変わる。属性: 風=緑、水=青、闇=紫、雷=金 */
+      .cutin { position: absolute; inset: 0; overflow: hidden; --pc: #38d9ff; --rc: #7fe0a0; --c: var(--rc); --band-h: 86px; --dim: 0.5; --chars: 5; --name-size: min(34px, 9vw); }
+      .cutin[data-player="1"] { --pc: #ff4fb8; }
       .cutin.uncommon { --rc: #7fe0a0; --dim: 0.5; }
       .cutin.rare { --rc: #6aa8ff; --dim: 0.6; --name-size: min(48px, 12vw); }
       .cutin.epic { --rc: #c58cff; --dim: 0.8; --name-size: min(68px, 16vw); }
       .cutin.legendary { --rc: #ffd46a; --dim: 0.92; --name-size: min(92px, 20vw); }
 
       /* 帯は、画面の左右いっぱいに広げる（端が斜めの線に見えないように、傾けない） */
-      .cutin-band { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; animation: cutin-slide var(--dur) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+      .cutin-band { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; animation: cutin-slide calc(var(--dur) - var(--band-delay, 0ms)) cubic-bezier(0.2, 0.8, 0.2, 1) var(--band-delay, 0ms) both; }
       .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
-        background: linear-gradient(90deg, color-mix(in srgb, var(--c) 28%, #05081a), color-mix(in srgb, var(--c) 52%, #05081a) 50%, color-mix(in srgb, var(--c) 28%, #05081a)); }
+        background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 45%, #03040c), color-mix(in srgb, var(--rc) 80%, #03040c) 50%, color-mix(in srgb, var(--rc) 45%, #03040c)); }
+      /* LEGENDARY だけは、帯の塗りを透明にして、金色の細い線と、光る文字だけで見せる */
+      .cutin.legendary .cutin-band::before { border-block: 0; box-shadow: none;
+        background: linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) top / 100% 2px no-repeat, linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) bottom / 100% 2px no-repeat; }
+      .cutin.legendary .cutin-name { text-shadow: 0 0 10px #fff3b0, 0 0 26px var(--rc), 0 0 60px var(--rc), 0 2px 18px rgba(0, 0, 0, 0.8); }
+      /* 帯の色が明るくなったので、文字は白で、影をつけて読みやすくする */
+      .cutin-reading { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); }
       .cutin-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.35em; color: var(--rc); text-shadow: 0 0 8px var(--rc); }
-      .cutin-name { font-size: var(--name-size); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 14px var(--c), 0 0 32px var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
+      .cutin-player { color: var(--pc); text-shadow: 0 0 8px var(--pc); }
+      /* 名前の文字数が多いほど、画面の幅に収まるよう小さくする（--chars は cutin.ts が設定） */
+      .cutin-name { font-size: min(var(--name-size), calc(88vw / (var(--chars) * 1.25))); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 14px var(--c), 0 0 32px var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
       .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
 
-      .cutin-dim { position: absolute; inset: 0; background: radial-gradient(circle, rgba(0, 0, 12, 0.45), rgba(0, 0, 12, 0.9)); animation: cutin-dim var(--dur) ease both; }
+      /* 画面を暗くする色も、レア度の色に寄せる（暗い緑・青・紫・金） */
+      .cutin-dim { position: absolute; inset: 0; animation: cutin-dim var(--dur) ease both;
+        background: radial-gradient(circle, color-mix(in srgb, var(--rc) 22%, #02030c), color-mix(in srgb, var(--rc) 9%, #02030c)); }
 
-      /* 電気（稲妻）。太い光の線と、細い白い芯。cutin.ts が、形とタイミングを決めて並べる */
-      .cutin-bolts { position: absolute; inset: 0; width: 100%; height: 100%; }
+      /* 属性の演出。形とタイミングは elements.ts（bolt.ts / fxplan.ts の計画）が決めて並べ、ここは動きと色だけ */
+      .cutin-fx { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+      /* 雷（LEGENDARY）: 最初に画面の中央へ大きな雷が 3 発落ち、そのあと帯の縁を電気が走る */
       .bolt { opacity: 0; animation: cutin-bolt var(--bd) linear var(--bdelay) both; }
+      .bolt.strike { animation-name: fx-strike; }
       .bolt path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
-      .bolt-glow { stroke: var(--c); opacity: 0.6; filter: blur(3px); }
-      .bolt-core { stroke: #fff; }
-      .cutin.legendary .bolt-glow, .cutin.epic .bolt-glow { stroke: var(--rc); }
+      .bolt-glow { stroke: var(--rc); opacity: 0.7; filter: blur(4px); }
+      .bolt-core { stroke: #fffbe0; }
+      .bolt.strike.big { animation-name: fx-strike-big; }
+      .fx-strike-flash { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, #fffbe0 0, color-mix(in srgb, var(--rc) 55%, #fff) 35%, transparent 80%); animation: fx-flash-strike 380ms ease-out var(--delay) both; }
+      .fx-strike-flash.big { animation-name: fx-flash-big; animation-duration: 700ms; }
+
+      /* 風・闇などの層。始めと終わりでふわっと現れて消える */
+      .fx-layer { position: absolute; inset: 0; animation: cutin-fadeio var(--dur) ease both; pointer-events: none; }
+
+      /* 風（UNCOMMON）: 曲がった風の筋が帯を走り、葉が舞う */
+      /* 風の筋は、演出の間ずっと、左から右へ流れ続ける（--delay は、繰り返しの途中から始めるためのずらし） */
+      .fx-streak { fill: none; stroke: #e2ffec; stroke-linecap: round; stroke-dasharray: 0.22 1.78; filter: drop-shadow(0 0 5px var(--rc)); animation: fx-run var(--d) linear infinite; animation-delay: calc(var(--delay) * -1); }
+      /* 名前のまわりで、風の渦がゆっくり回る */
+      .fx-swirl { animation: fx-spin var(--spin) linear infinite; animation-delay: calc(var(--delay) * -1); }
+      .fx-swirl path { fill: none; stroke: var(--rc); stroke-linecap: round; opacity: 0.75; filter: drop-shadow(0 0 6px var(--rc)); stroke-dasharray: 14 10; }
+      /* 葉は、外側が横へ流れ続け、内側が波打ちながらひらひら回る */
+      .fx-leaf { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: calc(var(--size) * 0.55); animation: fx-leaf-x var(--d) linear infinite; animation-delay: calc(var(--delay) * -1); }
+      .fx-leaf-body { width: 100%; height: 100%; border-radius: 0 100% 0 100%; background: linear-gradient(135deg, #d4ffe2, var(--rc)); box-shadow: 0 0 10px var(--rc); animation: fx-leaf-flutter 900ms ease-in-out infinite; }
+
+      /* 水（RARE）: 帯の中心から波紋が広がり、泡が昇り、帯の縁を波が流れる */
+      .fx-ripple { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border: 2px solid var(--rc); border-radius: 50%; box-shadow: 0 0 14px var(--rc), inset 0 0 14px var(--rc); opacity: 0; animation: fx-ripple var(--d) ease-out var(--delay) both; }
+      .fx-bubble { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border-radius: 50%; border: 1px solid #d6ecff; background: radial-gradient(circle at 30% 30%, #fff, rgba(106, 168, 255, 0.25) 60%, transparent 70%); opacity: 0; animation: fx-rise var(--d) ease-out var(--delay) both; }
+      .fx-wave path { fill: none; stroke: var(--rc); stroke-width: 2; filter: drop-shadow(0 0 5px var(--rc)); }
+      .fx-wave { animation: fx-wave 1.8s linear infinite; }
+
+      /* 闇（EPIC）: 帯の後ろに魔法陣が浮かんで回り、紫のもやが立ち昇る */
+      .fx-magic { opacity: 0; animation: fx-magic 900ms ease-out var(--delay) both, fx-breathe 2.2s ease-in-out infinite; }
+      .fx-magic circle, .fx-magic path { fill: none; stroke: var(--rc); stroke-width: 2; filter: drop-shadow(0 0 8px var(--rc)); }
+      .fx-spin { animation: fx-spin 7s linear infinite; }
+      .fx-spin.reverse { animation-direction: reverse; animation-duration: 11s; }
+      /* 魔法陣から、脈打つ輪が外へ広がり続ける */
+      .fx-pulse { fill: none; stroke: var(--rc); stroke-width: 3; opacity: 0; filter: drop-shadow(0 0 8px var(--rc)); animation: fx-pulse 1800ms ease-out infinite; animation-delay: var(--delay); }
+      /* 闇の蔓: 画面の下の左右から、這い上がっていく（繰り返し） */
+      .fx-tendril { fill: none; stroke: #7a3cc4; stroke-linecap: round; stroke-dasharray: 0.34 1.66; filter: drop-shadow(0 0 9px var(--rc)); animation: fx-run var(--d) ease-in-out infinite; animation-delay: calc(var(--delay) * -1); }
+      /* うねる霧: 画面の中心を軸に、ゆっくり回る */
+      .fx-fog-orbit { position: absolute; left: var(--cx); top: var(--cy); width: 0; height: 0; animation: fx-orbit var(--spin) linear infinite; transform: rotate(var(--start)); }
+      .fx-fog { position: absolute; width: var(--size); height: var(--size); left: calc(var(--orbit) - var(--size) / 2); top: calc(var(--size) / -2); border-radius: 50%; background: radial-gradient(circle, rgba(120, 60, 200, 0.5), rgba(60, 20, 120, 0.2) 55%, transparent 72%); filter: blur(18px); animation: fx-fog-breathe 3.4s ease-in-out infinite; }
+      /* もやは立ち昇り続け、火の粉は勢いよく昇る（どちらも繰り返し） */
+      .fx-wisp { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border-radius: 50%; background: radial-gradient(circle, rgba(197, 140, 255, 0.6), transparent 68%); filter: blur(10px); opacity: 0; animation: fx-wisp var(--d) ease-out infinite; animation-delay: calc(var(--delay) * -1); }
+      .fx-ember { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border-radius: 50%; background: #f1d6ff; box-shadow: 0 0 10px var(--rc), 0 0 18px var(--rc); opacity: 0; animation: fx-ember var(--d) ease-out infinite; animation-delay: calc(var(--delay) * -1); }
       .cutin-edge { position: absolute; inset: 0; display: none; box-shadow: inset 0 0 90px 10px var(--c); animation: cutin-edge var(--dur) ease both; }
       .cutin.rare .cutin-edge, .cutin.epic .cutin-edge { display: block; }
       .cutin.legendary .cutin-edge { display: block; box-shadow: inset 0 0 150px 34px var(--rc); }
@@ -83,13 +134,33 @@
       @keyframes cutin-fadeio { 0% { opacity: 0; } 12% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
       /* 稲妻は、2 回ほどちらつきながら光って消える（連続した点滅にはしない） */
       @keyframes cutin-bolt { 0% { opacity: 0; } 12% { opacity: 1; } 35% { opacity: 0.35; } 55% { opacity: 1; } 100% { opacity: 0; } }
+      /* 雷の大きな稲妻は、光って、一瞬暗くなり、もう一度光ってから消える */
+      @keyframes fx-strike { 0% { opacity: 0; } 6% { opacity: 1; } 22% { opacity: 0.35; } 34% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes fx-flash-strike { 0% { opacity: 0; } 12% { opacity: 0.55; } 100% { opacity: 0; } }
+      @keyframes fx-strike-big { 0% { opacity: 0; } 4% { opacity: 1; } 14% { opacity: 0.4; } 26% { opacity: 1; } 40% { opacity: 0.5; } 52% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes fx-flash-big { 0% { opacity: 0; } 8% { opacity: 0.8; } 100% { opacity: 0; } }
+      /* 線の一部が、道に沿って先へ走っていく */
+      @keyframes fx-run { 0% { stroke-dashoffset: 0.22; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { stroke-dashoffset: -1.78; opacity: 0; } }
+      @keyframes fx-leaf-x { from { transform: translateX(0); } to { transform: translateX(var(--dx)); } }
+      @keyframes fx-leaf-flutter { 0%, 100% { transform: translateY(calc(var(--amp) * -1)) rotate(-35deg) scaleY(1); } 50% { transform: translateY(var(--amp)) rotate(40deg) scaleY(0.35); } }
+      @keyframes fx-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+      @keyframes fx-pulse { 0% { opacity: 0.85; transform: scale(0.55); } 100% { opacity: 0; transform: scale(1.5); } }
+      @keyframes fx-orbit { to { transform: rotate(calc(var(--start) + 360deg)); } }
+      @keyframes fx-fog-breathe { 0%, 100% { transform: scale(0.9); opacity: 0.8; } 50% { transform: scale(1.2); opacity: 1; } }
+      @keyframes fx-ember { 0% { opacity: 0; transform: translate(0, 0) scale(1); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); } }
+      @keyframes fx-ripple { 0% { opacity: 0.95; transform: translate(-50%, -50%) scale(0.04, 0.015); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1, 0.34); } }
+      @keyframes fx-rise { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); } }
+      @keyframes fx-wave { from { transform: translateX(0); } to { transform: translateX(calc(var(--wl) * -1)); } }
+      @keyframes fx-spin { to { transform: rotate(360deg); } }
+      @keyframes fx-magic { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 0.9; transform: scale(1); } }
+      @keyframes fx-wisp { 0% { opacity: 0; transform: translate(0, 0) scale(0.7); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.5); } }
       @keyframes cutin-edge { 0% { opacity: 0; } 25% { opacity: 0.9; } 100% { opacity: 0; } }
       @keyframes cutin-flash { 0% { opacity: 0; } 15% { opacity: var(--flash, 0.5); } 100% { opacity: 0; } }
       @keyframes cutin-burst { 0% { opacity: 1; transform: translate(-50%, -50%) scale(var(--s)); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); } }
 
       /* OS の「視差効果を減らす」設定では、点滅・飛び散り・光の縁をなくし、帯は動かさず出し入れだけにする */
       @media (prefers-reduced-motion: reduce) {
-        .cutin-flash, .cutin-p, .cutin-edge, .cutin-bolts { display: none !important; }
+        .cutin-flash, .cutin-p, .cutin-edge, .fx-layer, .fx-strike-flash { display: none !important; }
         .cutin-band { animation-name: cutin-fadeio; }
         .cutin-name, .cutin-reading { animation: none; }
       }

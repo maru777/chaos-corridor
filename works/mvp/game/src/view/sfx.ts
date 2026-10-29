@@ -1,4 +1,5 @@
 import type { Rarity } from '../abilities';
+import { THUNDER_HITS_MS } from './bolt';
 
 /**
  * 能力を使ったときの効果音。音の素材は使わず、ブラウザの音声機能で合成する。
@@ -73,7 +74,9 @@ export function playSfx(rarity: Rarity, impactSec: number): void {
     whoosh(c, master, 600, 3000, t0, impactSec, 0.5);
     tone(c, master, 'triangle', NOTE.G5, NOTE.C6, hit, 0.25, 0.5);
   } else if (rarity === 'RARE') {
-    whoosh(c, master, 400, 4000, t0, impactSec, 0.6);
+    // 水: 水滴（高い音から低い音へ急に落ちる丸い音）と、澄んだ 2 音
+    whoosh(c, master, 400, 3000, t0, impactSec, 0.35);
+    [0.1, 0.22, 0.34].forEach((dt, i) => tone(c, master, 'sine', 1500 - i * 200, 500, t0 + dt * impactSec * 2, 0.12, 0.5));
     tone(c, master, 'triangle', NOTE.E5, NOTE.E5, hit, 0.5, 0.45);
     tone(c, master, 'triangle', NOTE.B5, NOTE.B5, hit + 0.1, 0.6, 0.4);
   } else if (rarity === 'EPIC') {
@@ -82,12 +85,17 @@ export function playSfx(rarity: Rarity, impactSec: number): void {
     for (const f of [NOTE.C5, NOTE.E5, NOTE.G5]) tone(c, master, 'sawtooth', f, f, hit, 1.0, 0.12);
     tone(c, master, 'triangle', NOTE.C6, NOTE.C6, hit + 0.15, 0.8, 0.3);
   } else {
-    // 低いうなりが上がっていき、衝撃で爆発し、長い和音と、きらめく高音が続く
-    tone(c, master, 'sawtooth', 55, 220, t0, impactSec, 0.18);
-    whoosh(c, master, 200, 7000, t0, impactSec, 1.0);
-    tone(c, master, 'sine', 100, 30, hit, 1.1, 1.0);
-    whoosh(c, master, 3000, 400, hit, 0.9, 0.9);
+    // 雷: 最初に、画面の中央へ落ちる雷が「ドドドン」と 3 発（だんだん強く）。そのあと名前が決まり、長い和音が続く
+    THUNDER_HITS_MS.forEach((ms, i) => thunderHit(c, master, t0 + ms / 1000, 0.7 + i * 0.25));
+    tone(c, master, 'sine', 80, 30, hit, 0.9, 0.7);
     for (const f of [NOTE.C4, NOTE.E4, NOTE.G4, NOTE.C5, NOTE.G5]) tone(c, master, 'sawtooth', f, f, hit, 2.2, 0.1);
     [NOTE.C6, NOTE.E6, NOTE.G5, NOTE.C6, NOTE.E6].forEach((f, i) => tone(c, master, 'triangle', f, f, hit + 0.2 + i * 0.16, 0.9, 0.3));
   }
+}
+
+/** 雷が落ちる音: 鋭い破裂（高い帯域のノイズ）→ 重い低音 → 長く尾を引くごろごろ */
+function thunderHit(c: AudioContext, out: AudioNode, start: number, vol: number): void {
+  whoosh(c, out, 6000, 2000, start - 0.01, 0.12, 1.2 * vol);
+  tone(c, out, 'sine', 110, 28, start, 0.7, 1.0 * vol);
+  whoosh(c, out, 900, 120, start, 0.7, 0.8 * vol);
 }

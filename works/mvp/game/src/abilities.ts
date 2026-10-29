@@ -16,33 +16,36 @@ export const RARITY_WEIGHT: Readonly<Record<Rarity, number>> = {
 
 export interface AbilityDef {
   readonly id: AbilityId;
-  /** 漢字の名前 */
+  /** 技名。漫画のような「XXXのYYY」の漢字（厨二感のある名前）。声に出して読み上げる */
   readonly name: string;
-  /** 横文字の読み（技名のように添える） */
+  /** 技名に添える、英語 2 語の読み（例: Phantom Slash） */
   readonly reading: string;
+  /** 声の読み方を直したいときだけ（漢字の読みが不自然なとき）。ひらがな・カタカナで書く */
+  readonly shout?: string;
   readonly rarity: Rarity;
+  /** 効果の説明（ゲームの内容が分かるもの） */
   readonly text: string;
 }
 
 export const ABILITIES: readonly AbilityDef[] = [
   {
     id: 'diagonal',
-    name: '斜行',
-    reading: 'ダイアゴナル',
+    name: '幻影の斜閃',
+    reading: 'Phantom Slash',
     rarity: 'UNCOMMON',
     text: '斜めに 1 マス動く（手番を使う）',
   },
   {
     id: 'reclaim',
-    name: '回収',
-    reading: 'リクレイム',
+    name: '煉獄の回帰',
+    reading: 'Crimson Return',
     rarity: 'UNCOMMON',
     text: '置いた自分の壁を 1 枚戻す（手番を使う）',
   },
   {
     id: 'jam',
-    name: '電波妨害',
-    reading: 'ジャミング',
+    name: '静寂の電牢',
+    reading: 'Silent Cage',
     rarity: 'UNCOMMON',
     text: '相手の次の手番では、壁を置けなくする（手番を使う）',
   },
