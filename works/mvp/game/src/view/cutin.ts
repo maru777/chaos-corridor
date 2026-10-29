@@ -136,6 +136,7 @@ export function playCutIn(container: HTMLElement, opts: CutInOptions): Promise<v
   root.style.setProperty('--band-delay', `${timing.bandDelayMs}ms`);
   root.style.setProperty('--band-h', `${BAND_HEIGHT_PX[opts.rarity]}px`);
   root.style.setProperty('--chars', String(Math.max(2, opts.name.length)));
+  root.style.setProperty('--rchars', String(opts.reading.length + 2));
 
   const w = window.innerWidth;
   const h = window.innerHeight;

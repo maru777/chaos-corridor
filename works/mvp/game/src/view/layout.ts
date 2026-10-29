@@ -66,9 +66,9 @@ export interface SafeArea {
 
 export function safeArea(aspect: number): SafeArea {
   // 縦長（スマホ）: 左右はほぼいっぱい。上は、プレイヤーカード（約 13%）、下は、手札とボタン（約 30%）を避ける
-  if (aspect < 1) return { x: 0.97, top: 0.74, bottom: -0.4 };
+  if (aspect < 1) return { x: 1, top: 0.78, bottom: -0.44 };
   // 横長（パソコン）: プレイヤーカードは左右の隅にあるので、上は高く使える。下は、ボタン。手札は左下にあるので、横幅を絞る
-  return { x: 0.78, top: 0.5, bottom: -0.8 };
+  return { x: 0.62, top: 0.8, bottom: -0.86 };
 }
 
 export interface CameraRig {
@@ -116,7 +116,7 @@ export function projectBoard(pos: readonly [number, number, number], aspect: num
 
 /** 画面の縦横比から、カメラの位置を決める。盤が、安全な範囲に、できるだけ大きく収まる距離を探す */
 export function cameraRig(aspect: number, size = 9): CameraRig {
-  const pitch = ((aspect < 1 ? 55 : 50) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
+  const pitch = ((aspect < 1 ? 70 : 62) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
   const safe = safeArea(aspect);
   const at = (d: number): [number, number, number] => [TARGET[0], TARGET[1] + d * Math.sin(pitch), TARGET[2] + d * Math.cos(pitch)];
   const extent = (d: number) => {

@@ -25,6 +25,7 @@ export interface Shell {
   /** オープニング・メニュー・技一覧・あそびかたの、どれかが出ているか（出ている間は、盤を操作させない） */
   isOpen(): boolean;
   openMenu(): void;
+  openCodex(): void;
 }
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -148,5 +149,6 @@ export function createShell(opts: ShellOptions): Shell {
   return {
     isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden,
     openMenu: () => dispatch('openMenu'),
+    openCodex: () => openModal(codex),
   };
 }

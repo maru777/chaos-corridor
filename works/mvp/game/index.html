@@ -65,7 +65,7 @@
       .cutin-player { color: var(--pc); }
       /* 名前の文字数が多いほど、画面の幅に収まるよう小さくする（--chars は cutin.ts が設定） */
       .cutin-name { font-size: min(var(--name-size), calc(88vw / (var(--chars) * 1.25))); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; -webkit-text-stroke: 0.12em rgba(0, 0, 0, 0.55); paint-order: stroke fill; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 0, 0, 0.6); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
-      .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: #eef3ff; -webkit-text-stroke: 0.2em rgba(0, 0, 0, 0.5); paint-order: stroke fill; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
+      .cutin-reading { font-size: min(calc(var(--name-size) * 0.38), calc(92vw / (var(--rchars, 14) * 0.95))); letter-spacing: 0.3em; color: #eef3ff; -webkit-text-stroke: 0.2em rgba(0, 0, 0, 0.5); paint-order: stroke fill; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
 
       /* 漫画の演出: 集中線・網点（ハーフトーン）・擬音の爆発 */
       .cutin-speed { position: absolute; inset: -25%; opacity: 0; --lines: color-mix(in srgb, var(--rc) 35%, #fff);
@@ -144,6 +144,8 @@
       .cutin-p:nth-child(3n) { background: #fff; }
       .cutin-p:nth-child(3n + 1) { background: var(--c); }
 
+      /* 縦長の画面（スマホ）: 文字の間隔をつめて、画面の幅に収める。帯は、画面の高さに合わせて少し高く */
+      @media (max-aspect-ratio: 1/1) { .cutin-reading { letter-spacing: 0.08em; } .cutin-name { letter-spacing: 0.12em; } .cutin-band, .cutin-text { top: 34%; } }
       @keyframes cutin-slide { 0% { transform: translateX(-105%); opacity: 0; } 12% { transform: translateX(0); opacity: 1; } 90% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(105%); opacity: 0; } }
       @keyframes cutin-name-pop { from { transform: scale(1.7); opacity: 0; filter: blur(8px); } to { transform: scale(1); opacity: 1; filter: blur(0); } }
       /* 集中線は、数コマだけ、ぶるっと揺れながら走って消える（アニメのコマ送りのように） */
@@ -221,6 +223,7 @@
       <button id="btn-length" hidden>壁の長さ: 長（2マス）</button>
       <button id="btn-undo">1 手戻す</button>
       <button id="btn-reset">最初から</button>
+      <button id="btn-codex">技一覧</button>
       <span id="hash" class="panel"></span>
     </div>
     <!-- オープニング（タイトル）。対局中は、メニューとして出る -->

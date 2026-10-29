@@ -82,7 +82,7 @@ describe('カメラ: 盤を、安全な範囲いっぱいに大きく', () => {
       const rig = cameraRig(aspect);
       const pts = projectBoard(rig.pos, aspect);
       const w = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
-      expect(w / 2).toBeGreaterThan(0.85);
+      expect(w / 2).toBeGreaterThan(0.9);
     }
   });
 

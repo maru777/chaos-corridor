@@ -71,6 +71,8 @@ let novaFirst: Pos | null = null;
 let shortMode = false;
 /** 手札を見ているか（手番が替わると、また伏せる）。相手に見せないための決まり */
 let lastTurn: PlayerId = 0;
+/** 手札で選んでいる（次のタップで使う）能力 */
+let armedAbility: AbilityId | null = null;
 /** デバッグ: 手札を、全部見えるようにする */
 let debugShowAll = false;
 /** カットインの演出中は、操作を受け付けない */
@@ -209,7 +211,7 @@ function renderHand(): void {
     const def = abilityDef(id);
     const b = document.createElement('button');
     b.className = `acard ${def.rarity.toLowerCase()}`;
-    b.setAttribute('aria-pressed', String(modeAbility(mode) === id));
+    b.setAttribute('aria-pressed', String(armedAbility === id || modeAbility(mode) === id));
     b.setAttribute('aria-label', `${def.name}。${def.text}`);
     const rar = document.createElement('span');
     rar.className = 'acard-rar';
@@ -225,13 +227,22 @@ function renderHand(): void {
     // 今は使えない技（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
     if (!usable.has(id)) b.disabled = true;
     const showDesc = () => {
-      handDescEl.textContent = def.text;
+      handDescEl.textContent = armedAbility === id ? `${def.text}（もう一度タップで使う）` : def.text;
     };
+    // 触れている間は、効果の説明を出す。タップで選び、同じカードをもう一度タップで使う
+    b.addEventListener('pointerdown', showDesc);
     b.addEventListener('mouseenter', showDesc);
     b.addEventListener('focus', showDesc);
     b.addEventListener('click', () => {
-      showDesc();
-      useAbility(id);
+      if (busy) return;
+      if (armedAbility === id) {
+        armedAbility = null;
+        useAbility(id);
+        return;
+      }
+      armedAbility = id;
+      renderHand();
+      handDescEl.textContent = `${def.text}（もう一度タップで使う）`;
     });
     abilitiesEl.appendChild(b);
   }
@@ -320,6 +331,7 @@ function refresh(): void {
   // 手番が替わったら、手札をまた伏せる（前の人の手札が、次の人に見えないように）
   if (state.turn !== lastTurn) {
     lastTurn = state.turn;
+    armedAbility = null;
   }
   ghost = null;
   view.setGhost(null, false);
@@ -623,6 +635,7 @@ const shell = createShell({
   },
   onRestart: resetGame,
 });
+el('btn-codex').addEventListener('click', () => shell.openCodex());
 el('btn-menu').addEventListener('click', () => {
   if (!busy) shell.openMenu();
 });

@@ -42,11 +42,14 @@
 @keyframes pcard-pulse { 0%, 100% { box-shadow: 5px 5px 0 var(--ink2), 0 0 0 3px var(--pc); } 50% { box-shadow: 5px 5px 0 var(--ink2), 0 0 0 6px var(--pc); } }
 
 #btn-menu { position: fixed; top: 8px; left: 8px; z-index: 30; min-height: 34px; padding: 4px 12px; font-size: 13px; }
+#btn-codex { background: #c9b8ff; }
 
 /* ===== 下の表示: 手札（カード） ===== */
 #abilities { flex-basis: 100%; display: flex; gap: 10px; justify-content: center; align-items: flex-end; flex-wrap: wrap; pointer-events: none; min-height: 40px; }
 #abilities > * { pointer-events: auto; }
-#hand-desc { flex-basis: 100%; text-align: center; min-height: 18px; font-size: 13px; font-weight: 800; color: #fff; -webkit-text-stroke: 3px var(--ink2); paint-order: stroke fill; pointer-events: none; }
+/* 効果の説明: カードに触れている間（または選んでいる間）だけ、手札の上に出るポップアップ */
+#hand-desc { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); width: max-content; max-width: min(92vw, 420px); margin-bottom: 4px; padding: 7px 12px; text-align: center; font-size: 13px; font-weight: 800; line-height: 1.4; color: var(--ink); background: #fffbe8; border: 3px solid var(--ink2); border-radius: 12px; box-shadow: 3px 3px 0 var(--ink2); pointer-events: none; z-index: 5; }
+#hand-desc:empty { display: none; }
 
 .acard {
   --rc: var(--c-uncommon);
@@ -219,5 +222,11 @@
 /* 横長の画面（パソコン）: 手札は、盤の下ではなく、左下に置く（盤の最後の行に被らないように） */
 @media (min-aspect-ratio: 5/4) {
   #abilities { position: fixed; left: 16px; bottom: 84px; flex-basis: auto; justify-content: flex-start; max-width: 34vw; }
-  #hand-desc { position: fixed; left: 16px; bottom: 60px; flex-basis: auto; text-align: left; max-width: 34vw; }
+  #hand-desc { position: fixed; left: 16px; bottom: 210px; transform: none; text-align: left; max-width: 26vw; }
+  /* プレイヤーカードは、盤の左右の余白に置く。状態の表示は、盤の上の中央 */
+  #top { justify-content: space-between; align-items: flex-start; padding-top: 52px; flex-wrap: nowrap; }
+  #top .pcard { flex: 0 0 auto; width: 190px; }
+  #pcard0 { order: 0; }
+  #pcard1 { order: 2; }
+  #center { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); }
 }
