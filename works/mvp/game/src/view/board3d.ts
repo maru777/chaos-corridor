@@ -25,6 +25,11 @@ const WALL_LENGTH = 1.9;
 const WALL_THICK = 0.1;
 const WALL_HEIGHT = 0.5;
 const WALL_COLOR = 0xffb04a;
+/** 鉄壁（鋼の色）と、短い壁（水色）。置く前の予告（緑・赤）と区別するため、本物の壁の色を覚えておく */
+const IRON_COLOR = 0xaab6cc;
+const SHORT_COLOR = 0x5fe0ff;
+const REAL_WALL_COLORS = new Set<number>([WALL_COLOR, IRON_COLOR, SHORT_COLOR]);
+const SHORT_LENGTH = 0.92;
 
 export interface BoardPoint {
   readonly bx: number;
@@ -60,6 +65,10 @@ export class BoardView {
   private readonly wallGeo = {
     h: new THREE.BoxGeometry(WALL_LENGTH, WALL_HEIGHT, WALL_THICK),
     v: new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, WALL_LENGTH),
+  };
+  private readonly shortWallGeo = {
+    h: new THREE.BoxGeometry(SHORT_LENGTH, WALL_HEIGHT, WALL_THICK),
+    v: new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, SHORT_LENGTH),
   };
   private readonly toon = makeToonGradient();
   private readonly wallMats = new Map<string, { solid: THREE.MeshToonMaterial; halo: THREE.MeshBasicMaterial }>();
@@ -207,8 +216,8 @@ export class BoardView {
    * 壁。アニメ調: トゥーンの色の塊に黒縁。外側に、ぼんやり光る暈を重ねる（光る表現は残す）。
    * ghost（置く前の予告）は、半透明にする。
    */
-  private makeWall(o: 'h' | 'v', color: number): THREE.Group {
-    const ghost = color !== WALL_COLOR;
+  private makeWall(o: 'h' | 'v', color: number, short = false): THREE.Group {
+    const ghost = !REAL_WALL_COLORS.has(color);
     const key = `${color}:${ghost}`;
     let mats = this.wallMats.get(key);
     if (!mats) {
@@ -218,10 +227,39 @@ export class BoardView {
       };
       this.wallMats.set(key, mats);
     }
+    const geo = short ? this.shortWallGeo[o] : this.wallGeo[o];
     const g = new THREE.Group();
-    const halo = new THREE.Mesh(this.wallGeo[o], mats.halo);
+    const halo = new THREE.Mesh(geo, mats.halo);
     halo.scale.set(o === 'h' ? 1.05 : 3, 1.5, o === 'h' ? 3 : 1.05);
-    g.add(outlineMesh(this.wallGeo[o], OUTLINE_WALL), new THREE.Mesh(this.wallGeo[o], mats.solid), halo);
+    g.add(outlineMesh(geo, color === IRON_COLOR ? OUTLINE_WALL * 1.6 : OUTLINE_WALL), new THREE.Mesh(geo, mats.solid), halo);
+    return g;
+  }
+
+  /** 隕石の足もと: 赤い着弾の印（マスの赤み・黒い×・影）。浮き沈みせず、どこに落ちたかを示す */
+  private makeMeteorGround(): THREE.Group {
+    const g = new THREE.Group();
+    const tint = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.92, 0.92),
+      new THREE.MeshBasicMaterial({ color: 0xff3b1a, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }),
+    );
+    tint.rotation.x = -Math.PI / 2;
+    tint.position.y = 0.008;
+    tint.renderOrder = 3;
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 28),
+      new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }),
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.01;
+    shadow.renderOrder = 4;
+    const cross = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, toneMapped: false });
+    for (const angle of [Math.PI / 4, -Math.PI / 4]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.012, 0.075), cross);
+      bar.rotation.y = angle;
+      bar.position.y = 0.016;
+      g.add(bar);
+    }
+    g.add(tint, shadow);
     return g;
   }
 
@@ -268,14 +306,17 @@ export class BoardView {
 
   private placeWall(obj: THREE.Object3D, wall: WallSpec): void {
     const w = wallToWorld(this.size, wall.x, wall.y);
-    obj.position.set(w.x, WALL_HEIGHT / 2, w.z);
+    // 短い壁は、交点の中心から、ふさぐ 1 マスの中心へ、半マスずらす
+    const shift = wall.half === undefined ? 0 : wall.half === 0 ? -0.5 : 0.5;
+    obj.position.set(w.x + (wall.o === 'h' ? shift : 0), WALL_HEIGHT / 2, w.z + (wall.o === 'v' ? shift : 0));
   }
 
   /** 状態を描き直す。legalMoves は、動けるマスの目印 */
   setState(state: GameState, legalMoves: readonly Pos[]): void {
     this.wallGroup.clear();
     for (const wall of state.walls) {
-      const obj = this.makeWall(wall.o, WALL_COLOR);
+      const short = wall.half !== undefined;
+      const obj = this.makeWall(wall.o, wall.iron ? IRON_COLOR : short ? SHORT_COLOR : WALL_COLOR, short);
       this.placeWall(obj, wall);
       this.wallGroup.add(obj);
     }
@@ -286,10 +327,12 @@ export class BoardView {
     }
     this.meteorGroup.clear();
     for (const m of state.meteors) {
-      const meteor = this.makeMeteor(m.turnsLeft);
       const w = cellToWorld(this.size, m.x, m.y);
+      const ground = this.makeMeteorGround(); // 足もとの着弾の印（動かない）
+      ground.position.set(w.x, 0, w.z);
+      const meteor = this.makeMeteor(m.turnsLeft);
       meteor.position.set(w.x, 0.36, w.z);
-      this.meteorGroup.add(meteor);
+      this.meteorGroup.add(ground, meteor);
     }
     this.markerGroup.clear();
     const color = PLAYER_COLORS[state.turn] as number;
@@ -314,7 +357,7 @@ export class BoardView {
       return;
     }
     this.scene.remove(this.ghost);
-    this.ghost = this.makeWall(wall.o, valid ? 0x4dff9a : 0xff4d4d);
+    this.ghost = this.makeWall(wall.o, valid ? 0x4dff9a : 0xff4d4d, wall.half !== undefined);
     this.placeWall(this.ghost, wall);
     this.scene.add(this.ghost);
   }
@@ -394,9 +437,10 @@ export class BoardView {
     for (const m of this.markerGroup.children) m.scale.setScalar(pulse);
     // 隕石は、ゆっくり回って、少し浮き沈みする
     for (const m of this.meteorGroup.children) {
-      m.position.y = 0.36 + Math.sin(t / 420) * 0.05;
       const rock = m.userData['rock'] as THREE.Object3D | undefined;
-      if (rock) rock.rotation.y = t / 700;
+      if (!rock) continue; // 足もとの印は動かさない
+      m.position.y = 0.36 + Math.sin(t / 420) * 0.05;
+      rock.rotation.y = t / 700;
     }
 
     // カメラ: ズーム（視野角をせばめる）と揺れ（位置をずらす）

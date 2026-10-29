@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellToWorld, nearestCell, nearestWallSlot, wallToWorld, worldToBoard } from '../src/view/layout';
+import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld, worldToBoard } from '../src/view/layout';
 
 describe('座標変換', () => {
   it('中央のマスは原点、角のマスは対称な位置', () => {
@@ -27,6 +27,14 @@ describe('座標変換', () => {
     expect(nearestCell(9, -0.6, 3)).toBeNull();
     expect(nearestCell(9, 3, 8.6)).toBeNull();
     expect(nearestCell(9, -0.4, 8.4)).toEqual({ x: 0, y: 8 });
+  });
+
+  it('短い壁の置き場所: 横は「行の間の線」と「列」、縦は「列の間の線」と「行」。盤の端に収まる', () => {
+    expect(nearestShortSlot(9, 3.1, 3.5, 'h')).toEqual({ line: 3, c: 3 });
+    expect(nearestShortSlot(9, 3.1, 3.5, 'v')).toEqual({ line: 3, c: 4 }); // 縦は、x が線、y が行（3.5 → 4 に丸まる）
+    expect(nearestShortSlot(9, -2, 20, 'h')).toEqual({ line: 7, c: 0 });
+    expect(nearestShortSlot(9, 20, -2, 'h')).toEqual({ line: 0, c: 8 });
+    expect(nearestShortSlot(9, 8, 8, 'v')).toEqual({ line: 7, c: 8 });
   });
 
   it('壁の交点は、マスの間にいちばん近いものになり、盤の端に収まる', () => {

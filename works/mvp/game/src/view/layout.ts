@@ -35,6 +35,17 @@ export function nearestCell(size: number, bx: number, by: number): Pos | null {
   return { x, y };
 }
 
+/**
+ * 短い壁（1 マス分）の置き場所: 向き o の壁が通る線（line）と、その線の上の何番目のマス（c）か。
+ * h は、行 line と line+1 の間の、列 c。v は、列 line と line+1 の間の、行 c。
+ */
+export function nearestShortSlot(size: number, bx: number, by: number, o: 'h' | 'v'): { line: number; c: number } {
+  const clamp = (v: number, hi: number) => Math.min(hi, Math.max(0, v));
+  const along = o === 'h' ? bx : by;
+  const across = o === 'h' ? by : bx;
+  return { line: clamp(Math.round(across - 0.5) + 0, size - 2), c: clamp(Math.round(along) + 0, size - 1) };
+}
+
 /** 盤の座標から、いちばん近い壁の交点（0..size-2 に収める） */
 export function nearestWallSlot(size: number, bx: number, by: number): Pos {
   const clamp = (v: number) => Math.min(size - 2, Math.max(0, v));

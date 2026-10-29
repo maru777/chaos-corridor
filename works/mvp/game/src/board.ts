@@ -11,14 +11,28 @@ export function inBounds(size: number, p: Pos): boolean {
   return p.x >= 0 && p.y >= 0 && p.x < size && p.y < size;
 }
 
-/** 隣り合う 2 マスの間が壁でふさがれているか */
+/** 壁がふさぐ範囲に、位置 t（h は列、v は行）が入っているか。base は壁の起点（h は x、v は y） */
+function spans(w: WallSpec, base: number, t: number): boolean {
+  return w.half === undefined ? t === base || t === base + 1 : t === base + w.half;
+}
+
+/** 隣り合う 2 マスの間が壁でふさがれているか（短い壁は、1 マス分だけふさぐ） */
 export function isBlocked(walls: readonly WallSpec[], a: Pos, b: Pos): boolean {
   if (a.y === b.y) {
     const wx = Math.min(a.x, b.x);
-    return walls.some((w) => w.o === 'v' && w.x === wx && (w.y === a.y || w.y === a.y - 1));
+    return walls.some((w) => w.o === 'v' && w.x === wx && spans(w, w.y, a.y));
   }
   const wy = Math.min(a.y, b.y);
-  return walls.some((w) => w.o === 'h' && w.y === wy && (w.x === a.x || w.x === a.x - 1));
+  return walls.some((w) => w.o === 'h' && w.y === wy && spans(w, w.x, a.x));
+}
+
+/**
+ * 壁がふさぐ線分の目印の一覧。h は「線 y の列 c」、v は「線 x の行 r」。
+ * 同じ目印を持つ壁どうしは、重なっている。
+ */
+export function wallSegments(w: WallSpec): string[] {
+  const parts = w.half === undefined ? [0, 1] : [w.half];
+  return parts.map((k) => (w.o === 'h' ? `h:${w.y}:${w.x + k}` : `v:${w.x}:${w.y + k}`));
 }
 
 /** 先手(0)は下段から上端へ、後手(1)は上段から下端へ向かう */

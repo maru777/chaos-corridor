@@ -7,14 +7,24 @@ import {
   drawAbilities,
   initialState,
   legalActions,
+  bothHavePath,
+  chaosResult,
+  gravityProblem,
+  gravityTarget,
+  invertedBoard,
   legalDiagonalMoves,
   legalLeapMoves,
   legalPawnMoves,
+  legalWalls,
   meteorProblem,
   meteorTarget,
   newGame,
+  novaSecondMoves,
+  shortWallSpec,
   stateHash,
+  voidTargets,
   wallProblem,
+  wallSegments,
 } from '../src';
 import type { AbilityDef, AbilityId, Action, GameState, Wall } from '../src';
 
@@ -65,7 +75,7 @@ describe('ガチャ', () => {
       { id: 'jam', name: '妨害', reading: 'c', rarity: 'LEGENDARY', text: 't' },
     ];
     const rng = createRng(2024);
-    const count: Record<AbilityId, number> = { diagonal: 0, reclaim: 0, jam: 0, leap: 0, meteor: 0 };
+    const count = Object.fromEntries(ABILITIES.map((a) => [a.id, 0])) as Record<AbilityId, number>;
     for (let i = 0; i < 6000; i++) count[drawAbilities(rng, 1, pool)[0] as AbilityId]++;
     expect(count.diagonal).toBeGreaterThan(count.reclaim);
     expect(count.reclaim).toBeGreaterThan(count.jam);
@@ -75,7 +85,7 @@ describe('ガチャ', () => {
   });
 
   it('引ける数より多く求めても、あるぶんだけ返す', () => {
-    expect(drawAbilities(createRng(1), 10)).toHaveLength(ABILITIES.length);
+    expect(drawAbilities(createRng(1), 100)).toHaveLength(ABILITIES.length);
   });
 });
 
@@ -350,6 +360,348 @@ describe('隕石（メテオ）', () => {
     const b = withAbilities([], [], { meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 3 }] });
     const c = withAbilities([], [], { meteors: [{ x: 4, y: 1, victim: 1, turnsLeft: 2 }] });
     expect(new Set([stateHash(a), stateHash(b), stateHash(c)]).size).toBe(3);
+  });
+});
+
+describe('能力の一覧', () => {
+  it('13 個。レア度は UNCOMMON 3・RARE 3・EPIC 5・LEGENDARY 2', () => {
+    expect(ABILITIES).toHaveLength(13);
+    const by = (r: string) => ABILITIES.filter((a) => a.rarity === r).length;
+    expect([by('UNCOMMON'), by('RARE'), by('EPIC'), by('LEGENDARY')]).toEqual([3, 3, 5, 2]);
+  });
+
+  it('どの能力も、手札に入れれば、使える場面がある（使える行動が 1 つ以上）', () => {
+    for (const a of ABILITIES) {
+      const s = withAbilities([a.id], [], { walls: [W(3, 3, 'h', 0), W(5, 5, 'v', 1)], pawns: [{ x: 4, y: 6 }, { x: 4, y: 2 }] });
+      expect(legalActions(s).some((x) => x.type === 'ability' && x.id === a.id)).toBe(true);
+    }
+  });
+});
+
+describe('不滅の城壁（鉄壁）', () => {
+  it('自分の壁 1 枚が鉄壁になり、能力が減り、手番が替わる', () => {
+    const s = withAbilities(['aegis'], [], { walls: [W(6, 6, 'v', 0)] });
+    const r = applyAction(s, { type: 'ability', id: 'aegis', wall: { x: 6, y: 6, o: 'v' } });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.walls[0]?.iron).toBe(true);
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+  });
+
+  it('相手の壁は、鉄壁にできない', () => {
+    const s = withAbilities(['aegis'], [], { walls: [W(6, 6, 'v', 1)] });
+    expect(applyAction(s, { type: 'ability', id: 'aegis', wall: { x: 6, y: 6, o: 'v' } }).ok).toBe(false);
+  });
+
+  it('鉄壁は、虚無でも、回収でも、消せない・戻せない', () => {
+    const iron: Wall = { ...W(6, 6, 'v', 0), iron: true };
+    const withVoid = withAbilities(['void', 'reclaim'], ['void'], { walls: [iron] });
+    expect(applyAction(withVoid, { type: 'ability', id: 'void', wall: { x: 6, y: 6, o: 'v' } }).ok).toBe(false);
+    expect(applyAction(withVoid, { type: 'ability', id: 'reclaim', wall: { x: 6, y: 6, o: 'v' } }).ok).toBe(false);
+    expect(voidTargets(withVoid)).toHaveLength(0);
+    // すでに鉄壁なので、もう一度は、鉄壁にできない
+    const again = withAbilities(['aegis'], [], { walls: [iron] });
+    expect(applyAction(again, { type: 'ability', id: 'aegis', wall: { x: 6, y: 6, o: 'v' } }).ok).toBe(false);
+  });
+
+  it('鉄壁の違いが、ハッシュに出る', () => {
+    const a = withAbilities([], [], { walls: [W(6, 6, 'v', 0)] });
+    const b = withAbilities([], [], { walls: [{ ...W(6, 6, 'v', 0), iron: true }] });
+    expect(stateHash(a)).not.toBe(stateHash(b));
+  });
+});
+
+describe('星爆の連舞（超新星）', () => {
+  it('1 手番に 2 回動く。能力が減り、手番が替わる', () => {
+    const s = withAbilities(['nova'], []);
+    const r = applyAction(s, { type: 'ability', id: 'nova', first: { x: 4, y: 7 }, second: { x: 4, y: 6 } });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.pawns[0]).toEqual({ x: 4, y: 6 });
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+  });
+
+  it('1 回目で動けない・2 回目が足りない・2 回目に動けない、は反則', () => {
+    const s = withAbilities(['nova'], []);
+    expect(applyAction(s, { type: 'ability', id: 'nova', first: { x: 4, y: 6 }, second: { x: 4, y: 5 } }).ok).toBe(false);
+    expect(applyAction(s, { type: 'ability', id: 'nova', first: { x: 4, y: 7 } }).ok).toBe(false);
+    expect(applyAction(s, { type: 'ability', id: 'nova', first: { x: 4, y: 7 }, second: { x: 4, y: 5 } }).ok).toBe(false);
+  });
+
+  it('2 回目は、1 回目で動いた先から、ふつうに動ける先（相手のコマの飛び越えも）', () => {
+    const s = withAbilities(['nova'], [], { pawns: [{ x: 4, y: 6 }, { x: 4, y: 4 }] });
+    // 1 回目 (4,5) へ → 目の前に相手がいるので、2 回目は、飛び越えて (4,3)
+    expect(novaSecondMoves(s, { x: 4, y: 5 }).some((p) => p.x === 4 && p.y === 3)).toBe(true);
+    // 壁があれば、動けない
+    const walled = withAbilities(['nova'], [], { pawns: [{ x: 4, y: 6 }, { x: 0, y: 0 }], walls: [W(3, 4, 'h', 1)] });
+    expect(novaSecondMoves(walled, { x: 4, y: 5 }).some((p) => p.x === 4 && p.y === 4)).toBe(false);
+  });
+
+  it('1 回目でゴール行に着けば、2 回目なしで勝つ', () => {
+    const s = withAbilities(['nova'], [], { pawns: [{ x: 2, y: 1 }, { x: 8, y: 8 }] });
+    expect(novaSecondMoves(s, { x: 2, y: 0 })).toEqual([]);
+    const r = applyAction(s, { type: 'ability', id: 'nova', first: { x: 2, y: 0 } });
+    expect(r.ok && r.state.winner).toBe(0);
+  });
+
+  it('2 回目でゴール行に着いても勝つ', () => {
+    const s = withAbilities(['nova'], [], { pawns: [{ x: 2, y: 2 }, { x: 8, y: 8 }] });
+    const r = applyAction(s, { type: 'ability', id: 'nova', first: { x: 2, y: 1 }, second: { x: 2, y: 0 } });
+    expect(r.ok && r.state.winner).toBe(0);
+  });
+
+  it('使える行動の一覧に、1 回目と 2 回目の組み合わせが出る', () => {
+    const s = withAbilities(['nova'], []);
+    const novas = legalActions(s).filter((a) => a.type === 'ability' && a.id === 'nova');
+    expect(novas.length).toBeGreaterThan(5);
+  });
+});
+
+describe('虚無の断罪（虚無）', () => {
+  it('壁 1 枚を消し、その壁は、持ち主の手元に戻る（相手の壁も、自分の壁も消せる）', () => {
+    const s = withAbilities(['void'], [], { walls: [W(3, 3, 'h', 1), W(6, 6, 'v', 0)], wallsLeft: [9, 9] });
+    const r = applyAction(s, { type: 'ability', id: 'void', wall: { x: 3, y: 3, o: 'h' } });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.walls).toHaveLength(1);
+    expect(r.state.wallsLeft).toEqual([9, 10]); // 持ち主（後手）に戻る
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    const own = applyAction(s, { type: 'ability', id: 'void', wall: { x: 6, y: 6, o: 'v' } });
+    expect(own.ok && own.state.wallsLeft).toEqual([10, 9]);
+  });
+
+  it('短い壁を消すと、持ち主の短い壁が戻る', () => {
+    const short: Wall = { x: 4, y: 7, o: 'h', half: 0, owner: 1 };
+    const s = withAbilities(['void'], [], { walls: [short], shortWalls: [0, 1] });
+    const r = applyAction(s, { type: 'ability', id: 'void', wall: { x: 4, y: 7, o: 'h', half: 0 } });
+    expect(r.ok && r.state.shortWalls).toEqual([0, 2]);
+  });
+
+  it('壁がない所は消せない。壁がなければ、使える行動に出ない', () => {
+    const s = withAbilities(['void'], []);
+    expect(applyAction(s, { type: 'ability', id: 'void', wall: { x: 3, y: 3, o: 'h' } }).ok).toBe(false);
+    expect(legalActions(s).some((a) => a.type === 'ability' && a.id === 'void')).toBe(false);
+  });
+});
+
+describe('重力の鎖（引力）', () => {
+  it('相手のコマを、ゴールと反対の向きに 1 マス引き戻す（後手は上へ、先手は下へ）', () => {
+    const s = withAbilities(['gravity'], [], { pawns: [{ x: 4, y: 8 }, { x: 4, y: 3 }] });
+    expect(gravityTarget(s)).toEqual({ x: 4, y: 2 });
+    const r = applyAction(s, { type: 'ability', id: 'gravity' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.pawns[1]).toEqual({ x: 4, y: 2 });
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    const second = withAbilities([], ['gravity'], { turn: 1, pawns: [{ x: 4, y: 5 }, { x: 4, y: 0 }] });
+    expect(gravityTarget(second)).toEqual({ x: 4, y: 6 });
+  });
+
+  it('壁・盤の端・自分のコマ・隕石があると、使えない（使える行動にも出ない）', () => {
+    const wall = withAbilities(['gravity'], [], { pawns: [{ x: 4, y: 8 }, { x: 4, y: 3 }], walls: [W(3, 2, 'h', 1)] });
+    expect(gravityProblem(wall)).toBe('壁にふさがれている');
+    const edge = withAbilities(['gravity'], [], { pawns: [{ x: 4, y: 8 }, { x: 4, y: 0 }] });
+    expect(gravityProblem(edge)).toBe('引き戻す先がない');
+    const mine = withAbilities(['gravity'], [], { pawns: [{ x: 4, y: 2 }, { x: 4, y: 3 }] });
+    expect(gravityProblem(mine)).toBe('自分のコマがいる');
+    const meteor = withAbilities(['gravity'], [], { pawns: [{ x: 4, y: 8 }, { x: 4, y: 3 }], meteors: [{ x: 4, y: 2, victim: 1, turnsLeft: 2 }] });
+    expect(gravityProblem(meteor)).toBe('隕石がある');
+    for (const s of [wall, edge, mine, meteor]) {
+      expect(applyAction(s, { type: 'ability', id: 'gravity' }).ok).toBe(false);
+      expect(legalActions(s).some((a) => a.type === 'ability' && a.id === 'gravity')).toBe(false);
+    }
+  });
+});
+
+describe('氷刻の静止（時停）', () => {
+  it('相手の手番を飛ばし、続けて自分がもう一度動く。相手の電波妨害は解け、隕石の残りは減る', () => {
+    const s = withAbilities(['stasis'], [], { wallBlocked: [false, true], meteors: [{ x: 1, y: 1, victim: 1, turnsLeft: 2 }] });
+    const r = applyAction(s, { type: 'ability', id: 'stasis' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.turn).toBe(0); // 手番は、自分のまま
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.wallBlocked).toEqual([false, false]);
+    expect(r.state.meteors[0]?.turnsLeft).toBe(1);
+    // 続けて動ける
+    expect(applyAction(r.state, { type: 'move', to: { x: 4, y: 7 } }).ok).toBe(true);
+  });
+
+  it('相手の隕石が 1 回で切れるときは、消える', () => {
+    const s = withAbilities(['stasis'], [], { meteors: [{ x: 1, y: 1, victim: 1, turnsLeft: 1 }] });
+    const r = applyAction(s, { type: 'ability', id: 'stasis' });
+    expect(r.ok && r.state.meteors).toEqual([]);
+  });
+});
+
+describe('三重の結界（三連壁・短い壁）', () => {
+  it('使うと、短い壁を 3 枚持つ（ふつうの壁の残りは変わらない）', () => {
+    const s = withAbilities(['triwall'], []);
+    const r = applyAction(s, { type: 'ability', id: 'triwall' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.shortWalls).toEqual([3, 0]);
+    expect(r.state.wallsLeft).toEqual([10, 10]);
+    expect(r.state.turn).toBe(1);
+  });
+
+  it('短い壁は、1 マス分だけをふさぎ、ふつうの壁の残りを減らさず、短い壁の残りを減らす', () => {
+    const s = withAbilities([], [], { shortWalls: [3, 0] });
+    const r = applyAction(s, { type: 'wall', x: 4, y: 7, o: 'h', half: 0 });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.walls[0]).toEqual({ x: 4, y: 7, o: 'h', half: 0, owner: 0 });
+    expect(r.state.shortWalls).toEqual([2, 0]);
+    expect(r.state.wallsLeft).toEqual([10, 10]);
+    // 列 4 だけがふさがれる。列 5 は通れる
+    const back = { ...r.state, turn: 0 as const, pawns: [{ x: 4, y: 8 }, { x: 0, y: 0 }] as GameState['pawns'] };
+    expect(legalPawnMoves(back).some((p) => p.x === 4 && p.y === 7)).toBe(false);
+    const side = { ...back, pawns: [{ x: 5, y: 8 }, { x: 0, y: 0 }] as GameState['pawns'] };
+    expect(legalPawnMoves(side).some((p) => p.x === 5 && p.y === 7)).toBe(true);
+  });
+
+  it('短い壁の残りがなければ置けない。ふつうの壁は、短い壁の残りがなくても置ける', () => {
+    const s = withAbilities([], []);
+    expect(applyAction(s, { type: 'wall', x: 4, y: 7, o: 'h', half: 0 }).ok).toBe(false);
+    expect(applyAction(s, { type: 'wall', x: 4, y: 7, o: 'h' }).ok).toBe(true);
+  });
+
+  it('同じ 1 マスを指す別の書き方（x=3, half=1 と x=4, half=0）は、置くと 1 通りにそろう（ハッシュがずれない）', () => {
+    const s = withAbilities([], [], { shortWalls: [3, 0] });
+    const a = applyAction(s, { type: 'wall', x: 3, y: 7, o: 'h', half: 1 });
+    const b = applyAction(s, { type: 'wall', x: 4, y: 7, o: 'h', half: 0 });
+    if (!a.ok || !b.ok) throw new Error('置けない');
+    expect(a.state.walls).toEqual(b.state.walls);
+    expect(stateHash(a.state)).toBe(stateHash(b.state));
+    const v1 = applyAction(s, { type: 'wall', x: 2, y: 3, o: 'v', half: 1 });
+    const v2 = applyAction(s, { type: 'wall', x: 2, y: 4, o: 'v', half: 0 });
+    expect(v1.ok && v2.ok && stateHash(v1.state) === stateHash(v2.state)).toBe(true);
+  });
+
+  it('同じ 1 マスは、重ねて置けない。長い壁と同じ 1 マスも重なる。長い壁どうしの十字は禁止のまま', () => {
+    const base = withAbilities([], [], { shortWalls: [3, 0], walls: [{ x: 4, y: 7, o: 'h', half: 0, owner: 1 }] });
+    // 列 4 を、別の表し方（x=3, half=1）で置こうとしても、同じ 1 マスなので重なる
+    expect(wallProblem(base, { x: 3, y: 7, o: 'h', half: 1 })).toBe('壁が重なる');
+    // 隣の列 5 は置ける
+    expect(wallProblem(base, { x: 5, y: 7, o: 'h', half: 0 })).toBeNull();
+    // 長い壁 (4,7) は、列 4・5 をふさぐので、列 4 の短い壁と重なる
+    expect(wallProblem(base, { x: 4, y: 7, o: 'h' })).toBe('壁が重なる');
+    const longWall = withAbilities([], [], { shortWalls: [3, 0], walls: [W(4, 7, 'h', 1)] });
+    expect(wallProblem(longWall, { x: 5, y: 7, o: 'h', half: 0 })).toBe('壁が重なる');
+    expect(wallProblem(longWall, { x: 6, y: 7, o: 'h', half: 0 })).toBeNull();
+    expect(wallProblem(longWall, { x: 4, y: 7, o: 'v' })).toBe('壁が重なる'); // 長い壁どうしの十字
+  });
+
+  it('短い壁を持っているときだけ、置ける短い壁が一覧に出る（盤の端のマスも）', () => {
+    const none = withAbilities([], []);
+    expect(legalWalls(none).some((w) => w.half !== undefined)).toBe(false);
+    const has = withAbilities([], [], { shortWalls: [3, 0] });
+    const shorts = legalWalls(has).filter((w) => w.half !== undefined);
+    expect(shorts).toHaveLength(2 * 8 * 9);
+    expect(shortWallSpec('h', 3, 8, 9)).toEqual({ x: 7, y: 3, o: 'h', half: 1 });
+    expect(shortWallSpec('v', 2, 0, 9)).toEqual({ x: 2, y: 0, o: 'v', half: 0 });
+  });
+
+  it('短い壁を戻す（回収）と、短い壁の残りが戻る', () => {
+    const s = withAbilities(['reclaim'], [], { walls: [{ x: 4, y: 7, o: 'h', half: 0, owner: 0 }], shortWalls: [2, 0] });
+    const r = applyAction(s, { type: 'ability', id: 'reclaim', wall: { x: 4, y: 7, o: 'h', half: 0 } });
+    expect(r.ok && r.state.shortWalls).toEqual([3, 0]);
+    expect(r.ok && r.state.wallsLeft).toEqual([10, 10]);
+  });
+
+  it('短い壁も、ゴールへの道をなくす置き方はできない', () => {
+    // 後手が左上の隅 (0,0)。出口は (0,1) と (1,0)→… のうち、長い壁で 1〜8 列をふさぎ、(0,1) だけが出口
+    const walls: Wall[] = [W(1, 0, 'h', 0), W(3, 0, 'h', 0), W(5, 0, 'h', 0), W(7, 0, 'h', 0)];
+    const s = withAbilities([], [], { shortWalls: [3, 0], pawns: [{ x: 4, y: 8 }, { x: 0, y: 0 }], walls });
+    expect(wallProblem(s, { x: 0, y: 0, o: 'h', half: 0 })).toBe('ゴールへの道がなくなる');
+  });
+});
+
+describe('混沌の創世（混沌）', () => {
+  const walls: Wall[] = [
+    W(0, 2, 'h', 0),
+    W(2, 2, 'h', 1),
+    W(4, 4, 'v', 0),
+    W(6, 5, 'h', 1),
+    { x: 3, y: 6, o: 'v', half: 0, owner: 1 },
+    { ...W(5, 1, 'h', 0), iron: true },
+  ];
+  const base = withAbilities(['chaos'], [], { walls, wallsLeft: [8, 8], shortWalls: [0, 1], pawns: [{ x: 4, y: 7 }, { x: 4, y: 1 }] });
+
+  it('同じ種なら、同じ結果。種が違えば、たいてい違う並びになる', () => {
+    expect(chaosResult(base, 7)).toEqual(chaosResult(base, 7));
+    const layouts = new Set(Array.from({ length: 10 }, (_, i) => JSON.stringify(chaosResult(base, i + 1).walls)));
+    expect(layouts.size).toBeGreaterThan(1);
+  });
+
+  it('鉄壁は動かない。ほかの壁は、枚数・持ち主・長さの種類を保ち、置けなかった分は手元に戻る', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = chaosResult(base, seed);
+      expect(r.walls.filter((w) => w.iron)).toEqual([{ ...W(5, 1, 'h', 0), iron: true }]);
+      const placed = r.walls.filter((w) => !w.iron);
+      const returnedLong = r.wallsLeft[0] + r.wallsLeft[1] - 16;
+      const returnedShort = r.shortWalls[0] + r.shortWalls[1] - 1;
+      expect(placed.length + returnedLong + returnedShort).toBe(5);
+      // 持ち主ごとの数
+      const owners = (list: readonly Wall[]) => [list.filter((w) => w.owner === 0).length, list.filter((w) => w.owner === 1).length];
+      expect(owners(placed)[0]).toBe(owners(base.walls.filter((w) => !w.iron))[0]! - (r.wallsLeft[0] - 8) - (r.shortWalls[0] - 0));
+    }
+  });
+
+  it('置き直したあとも、壁は重ならず、どちらのコマにも、ゴールへの道が残る', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = chaosResult(base, seed);
+      const segs = r.walls.flatMap((w) => wallSegments(w));
+      expect(new Set(segs).size).toBe(segs.length);
+      expect(bothHavePath(base, r.walls)).toBe(true);
+    }
+  });
+
+  it('使うと、壁が置き直され、能力が減り、手番が替わる。動かせる壁がないと使えない', () => {
+    const r = applyAction(base, { type: 'ability', id: 'chaos', seed: 5 });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    const empty = withAbilities(['chaos'], [], { walls: [{ ...W(5, 1, 'h', 0), iron: true }] });
+    expect(applyAction(empty, { type: 'ability', id: 'chaos', seed: 1 }).ok).toBe(false);
+    expect(legalActions(empty).some((a) => a.type === 'ability' && a.id === 'chaos')).toBe(false);
+  });
+});
+
+describe('天地の逆転（天地反転）', () => {
+  const state = withAbilities(['invert'], [], {
+    pawns: [{ x: 4, y: 6 }, { x: 3, y: 2 }],
+    walls: [W(1, 2, 'h', 0), { x: 2, y: 4, o: 'v', half: 0, owner: 1 }, { ...W(6, 6, 'v', 1), iron: true }],
+    meteors: [{ x: 2, y: 5, victim: 0, turnsLeft: 2 }],
+  });
+
+  it('盤を 180 度回す: 壁・隕石は反転し、コマは位置を入れ替える（回したあとの位置）', () => {
+    const b = invertedBoard(state);
+    expect(b.pawns).toEqual([{ x: 5, y: 6 }, { x: 4, y: 2 }]);
+    expect(b.walls[0]).toEqual({ x: 6, y: 5, o: 'h', owner: 0 });
+    expect(b.walls[1]).toEqual({ x: 5, y: 4, o: 'v', half: 0, owner: 1 });
+    expect(b.walls[2]).toEqual({ x: 1, y: 1, o: 'v', owner: 1, iron: true });
+    expect(b.meteors).toEqual([{ x: 6, y: 3, victim: 0, turnsLeft: 2 }]);
+  });
+
+  it('2 回回すと、元に戻る', () => {
+    const once = invertedBoard(state);
+    const twice = invertedBoard({ ...state, ...once });
+    expect(twice.pawns).toEqual(state.pawns);
+    expect(twice.walls).toEqual(state.walls);
+    expect(twice.meteors).toEqual(state.meteors);
+  });
+
+  it('使うと、能力が減り、手番が替わり、回したあとも、ゴールへの道が残る', () => {
+    const r = applyAction(state, { type: 'ability', id: 'invert' });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.state.abilities[0]).toEqual([]);
+    expect(r.state.turn).toBe(1);
+    expect(r.state.winner).toBeNull();
+    expect(bothHavePath(r.state, r.state.walls)).toBe(true);
+  });
+
+  it('壁がなくても、使える（コマの位置が入れ替わる）', () => {
+    const plain = withAbilities(['invert'], [], { pawns: [{ x: 4, y: 6 }, { x: 4, y: 3 }] });
+    const r = applyAction(plain, { type: 'ability', id: 'invert' });
+    expect(r.ok && r.state.pawns).toEqual([{ x: 4, y: 5 }, { x: 4, y: 2 }]);
   });
 });
 

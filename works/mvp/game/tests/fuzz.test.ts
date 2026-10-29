@@ -4,9 +4,11 @@ import {
   bothHavePath,
   createRng,
   inBounds,
+  isMeteorAt,
   legalActions,
   newGame,
   randomInt,
+  wallSegments,
 } from '../src';
 import type { Action, GameState } from '../src';
 
@@ -16,12 +18,23 @@ function checkInvariants(s: GameState): void {
   expect(s.pawns[0]).not.toEqual(s.pawns[1]);
   expect(s.wallsLeft[0]).toBeGreaterThanOrEqual(0);
   expect(s.wallsLeft[1]).toBeGreaterThanOrEqual(0);
-  expect(s.walls.length + s.wallsLeft[0] + s.wallsLeft[1]).toBe(20);
+  // ふつうの壁は、盤の上と手元を合わせて、必ず 20 枚。短い壁は、三連壁を使うたびに 3 枚増えるので、3 の倍数
+  const longOnBoard = s.walls.filter((w) => w.half === undefined).length;
+  const shortOnBoard = s.walls.length - longOnBoard;
+  expect(longOnBoard + s.wallsLeft[0] + s.wallsLeft[1]).toBe(20);
+  expect(s.shortWalls[0]).toBeGreaterThanOrEqual(0);
+  expect(s.shortWalls[1]).toBeGreaterThanOrEqual(0);
+  expect((shortOnBoard + s.shortWalls[0] + s.shortWalls[1]) % 3).toBe(0);
   expect(s.abilities[0].length).toBeLessThanOrEqual(2);
   expect(s.abilities[1].length).toBeLessThanOrEqual(2);
+  // どちらのコマにも、壁と隕石を避けたゴールへの道が残る
   expect(bothHavePath(s, s.walls)).toBe(true);
-  const keys = new Set(s.walls.map((w) => `${w.x},${w.y}`));
-  expect(keys.size).toBe(s.walls.length);
+  // 壁は、どれも、ほかの壁と同じ線分を使わない（重ならない）
+  const segs = s.walls.flatMap((w) => wallSegments(w));
+  expect(new Set(segs).size).toBe(segs.length);
+  // コマは、隕石のマスにいない
+  expect(isMeteorAt(s, s.pawns[0])).toBe(false);
+  expect(isMeteorAt(s, s.pawns[1])).toBe(false);
 }
 
 describe('ボット同士の大量対局', () => {

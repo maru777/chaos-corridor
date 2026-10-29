@@ -7,19 +7,37 @@ import {
   legalLeapMoves,
   legalPawnMoves,
   newGame,
+  novaSecondMoves,
   reclaimableWalls,
+  shortWallSpec,
   stateHash,
+  voidTargets,
   wallProblem,
 } from './index';
-import type { AbilityId, Action, GameState, Orientation, PlayerId, Rarity, WallSpec } from './index';
+import type { AbilityId, Action, GameState, Orientation, PlayerId, Pos, Rarity, WallSpec } from './index';
 import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
-import { cellToWorld, nearestCell, nearestWallSlot, wallToWorld } from './view/layout';
+import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld } from './view/layout';
 import { showPop } from './view/popsfx';
 import { playMoveSfx, playSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 
-type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'reclaim';
+/** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
+type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | 'reclaim' | 'aegis' | 'void';
+type WallPickMode = 'reclaim' | 'aegis' | 'void';
+
+function isWallPick(m: Mode): m is WallPickMode {
+  return m === 'reclaim' || m === 'aegis' || m === 'void';
+}
+
+/** そのモードが使っている能力（ふつうの移動・壁のときは null） */
+function modeAbility(m: Mode): AbilityId | null {
+  if (m === 'move' || m === 'wall') return null;
+  return m === 'nova1' || m === 'nova2' ? 'nova' : m;
+}
+
+/** 押したらすぐ使う（場所を選ばない）能力 */
+const INSTANT_ABILITIES: ReadonlySet<AbilityId> = new Set<AbilityId>(['jam', 'meteor', 'gravity', 'stasis', 'triwall', 'invert']);
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -41,6 +59,10 @@ let log: Action[] = [];
 let mode: Mode = 'move';
 let orient: Orientation = 'h';
 let ghost: WallSpec | null = null;
+/** 超新星の 1 回目に選んだマス（2 回目を選ぶまで覚えておく） */
+let novaFirst: Pos | null = null;
+/** 短い壁（三連壁）を置くモードか。短い壁を持っているときだけ切り替えられる */
+let shortMode = false;
 /** カットインの演出中は、操作を受け付けない */
 let busy = false;
 /** 演出の通し番号。デバッグで途中から演出を打ち切って出し直しても、古い演出の後始末が新しい演出を壊さないようにする */
@@ -59,32 +81,46 @@ const abilitiesEl = el('abilities');
 const btnMove = el<HTMLButtonElement>('btn-move');
 const btnWall = el<HTMLButtonElement>('btn-wall');
 const btnRotate = el<HTMLButtonElement>('btn-rotate');
+const btnLength = el<HTMLButtonElement>('btn-length');
 const btnUndo = el<HTMLButtonElement>('btn-undo');
 const btnReset = el<HTMLButtonElement>('btn-reset');
 
 function ghostKey(w: WallSpec | null): string {
-  return w === null ? '' : `${w.o}${w.x},${w.y}`;
+  return w === null ? '' : `${w.o}${w.x},${w.y}${w.half ?? ''}`;
 }
 
 function say(text: string): void {
   msgEl.textContent = text;
 }
 
-function nearestOwnWall(bx: number, by: number): WallSpec | null {
+/** 盤の座標での、壁の中心。短い壁は、ふさぐ 1 マスの中心 */
+function wallCenter(w: WallSpec): { x: number; y: number } {
+  const shift = w.half === undefined ? 0.5 : w.half;
+  return w.o === 'h' ? { x: w.x + shift, y: w.y + 0.5 } : { x: w.x + 0.5, y: w.y + shift };
+}
+
+/** candidates の壁のうち、盤の座標 (bx, by) にいちばん近いもの（遠すぎれば null）。鉄壁かどうかなどの目印は落として、位置だけ返す */
+function nearestWallOf(candidates: readonly WallSpec[], bx: number, by: number): WallSpec | null {
   let best: WallSpec | null = null;
   let bestDist = 1.0;
-  for (const w of reclaimableWalls(state)) {
-    const d = Math.hypot(w.x + 0.5 - bx, w.y + 0.5 - by);
+  for (const w of candidates) {
+    const c = wallCenter(w);
+    const d = Math.hypot(c.x - bx, c.y - by);
     if (d < bestDist) {
       bestDist = d;
-      best = { x: w.x, y: w.y, o: w.o };
+      best = w.half === undefined ? { x: w.x, y: w.y, o: w.o } : { x: w.x, y: w.y, o: w.o, half: w.half };
     }
   }
   return best;
 }
 
+/** 壁を選ぶモード（回収・鉄壁・虚無）で、選べる壁 */
+function pickCandidates(m: WallPickMode): readonly WallSpec[] {
+  return m === 'void' ? voidTargets(state) : reclaimableWalls(state);
+}
+
 function updatePreview(clientX: number, clientY: number): void {
-  if (state.winner !== null || (mode !== 'wall' && mode !== 'reclaim')) {
+  if (state.winner !== null || (mode !== 'wall' && !isWallPick(mode))) {
     ghost = null;
     view.setGhost(null, false);
     return;
@@ -92,11 +128,16 @@ function updatePreview(clientX: number, clientY: number): void {
   const p = view.pick(clientX, clientY);
   if (p === null) return;
   if (mode === 'wall') {
-    const slot = nearestWallSlot(state.size, p.bx, p.by);
-    ghost = { x: slot.x, y: slot.y, o: orient };
+    if (shortMode && state.shortWalls[state.turn] > 0) {
+      const s = nearestShortSlot(state.size, p.bx, p.by, orient);
+      ghost = shortWallSpec(orient, s.line, s.c, state.size);
+    } else {
+      const slot = nearestWallSlot(state.size, p.bx, p.by);
+      ghost = { x: slot.x, y: slot.y, o: orient };
+    }
     view.setGhost(ghost, wallProblem(state, ghost) === null);
-  } else {
-    ghost = nearestOwnWall(p.bx, p.by);
+  } else if (isWallPick(mode)) {
+    ghost = nearestWallOf(pickCandidates(mode), p.bx, p.by);
     view.setGhost(ghost, true);
   }
 }
@@ -124,7 +165,7 @@ function renderAbilities(): void {
     const b = document.createElement('button');
     b.className = `ability ${def.rarity.toLowerCase()}`;
     b.title = def.text;
-    b.setAttribute('aria-pressed', String(mode === id));
+    b.setAttribute('aria-pressed', String(modeAbility(mode) === id));
     const name = document.createElement('strong');
     name.textContent = def.name;
     const reading = document.createElement('small');
@@ -161,16 +202,27 @@ function runEffect(name: string, reading: string, rarity: Rarity, player: Player
 function useAbility(id: AbilityId): void {
   if (busy) return;
   const def = abilityDef(id);
-  // 場所を選ばない能力は、押したらすぐ使う
-  if (id === 'jam' || id === 'meteor') {
-    play({ type: 'ability', id });
+  // 場所を選ばない能力は、押したらすぐ使う。混沌は、乱数の種も、操作の記録に残す（同じ結果を再現できるように）
+  if (INSTANT_ABILITIES.has(id)) {
+    play({ type: 'ability', id } as Action);
     return;
   }
-  mode = mode === id ? 'move' : id;
-  say(mode === id ? def.text : '');
-  if (mode === 'reclaim' && reclaimableWalls(state).length === 0) {
+  if (id === 'chaos') {
+    play({ type: 'ability', id, seed: newSeed() });
+    return;
+  }
+  // 場所や壁を選ぶ能力: もう一度押すと、選ぶのをやめる
+  novaFirst = null;
+  if (modeAbility(mode) === id) {
     mode = 'move';
-    say('戻せる自分の壁がない');
+    say('');
+  } else {
+    mode = id === 'nova' ? 'nova1' : (id as Mode);
+    say(def.text);
+    if (isWallPick(mode) && pickCandidates(mode).length === 0) {
+      mode = 'move';
+      say(id === 'void' ? '消せる壁がない' : id === 'aegis' ? '鉄壁にできる自分の壁がない' : '戻せる自分の壁がない');
+    }
   }
   refresh();
 }
@@ -179,12 +231,16 @@ function refresh(): void {
   ghost = null;
   view.setGhost(null, false);
   if (state.winner !== null || (mode === 'wall' && state.wallBlocked[state.turn])) mode = mode === 'wall' ? 'move' : mode;
-  if ((mode === 'diagonal' || mode === 'leap' || mode === 'reclaim') && !hasAbility(mode)) mode = 'move';
+  const needed = modeAbility(mode);
+  if (needed !== null && !hasAbility(needed)) mode = 'move';
+  if (mode !== 'nova2') novaFirst = null;
+  if (!(state.shortWalls[state.turn] > 0)) shortMode = false;
   let markers: readonly { x: number; y: number }[] = [];
   if (state.winner === null) {
-    if (mode === 'move') markers = legalPawnMoves(state);
+    if (mode === 'move' || mode === 'nova1') markers = legalPawnMoves(state);
     else if (mode === 'diagonal') markers = legalDiagonalMoves(state);
     else if (mode === 'leap') markers = legalLeapMoves(state);
+    else if (mode === 'nova2' && novaFirst !== null) markers = [novaFirst, ...novaSecondMoves(state, novaFirst)];
   }
   view.setState(state, markers);
   if (state.winner !== null) {
@@ -192,13 +248,17 @@ function refresh(): void {
     statusEl.dataset.turn = String(state.winner);
   } else {
     const blocked = state.wallBlocked[state.turn] ? '　【壁封じ中】' : '';
-    statusEl.textContent = `${NAMES[state.turn]}の番　壁 残り ${state.wallsLeft[state.turn]}${blocked}`;
+    const shortLeft = state.shortWalls[state.turn] > 0 ? `　短い壁 ${state.shortWalls[state.turn]}` : '';
+    statusEl.textContent = `${NAMES[state.turn]}の番　壁 残り ${state.wallsLeft[state.turn]}${shortLeft}${blocked}`;
     statusEl.dataset.turn = String(state.turn);
   }
   btnMove.setAttribute('aria-pressed', String(mode === 'move'));
   btnWall.setAttribute('aria-pressed', String(mode === 'wall'));
   btnWall.disabled = state.winner === null && state.wallBlocked[state.turn];
   btnRotate.textContent = `壁の向き: ${orient === 'h' ? '横' : '縦'}`;
+  // 短い壁を持っているときだけ、壁の長さを切り替えるボタンを出す
+  btnLength.hidden = !(state.winner === null && state.shortWalls[state.turn] > 0);
+  btnLength.textContent = `壁の長さ: ${shortMode ? '短（1マス）' : '長（2マス）'}`;
   btnUndo.disabled = log.length === 0;
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
   renderAbilities();
@@ -214,7 +274,8 @@ function play(action: Action): void {
   const mover = state.turn;
   const before = state;
   say('');
-  if (mode === 'diagonal' || mode === 'leap' || mode === 'reclaim') mode = 'move';
+  if (mode !== 'move' && mode !== 'wall') mode = 'move';
+  novaFirst = null;
   if (action.type === 'ability') {
     // 状態は確定済み。盤の見た目は、カットインの見せ場で切り替える
     if (keepAbilities) {
@@ -270,6 +331,36 @@ function setMode(next: Mode): void {
   refresh();
 }
 
+/** 超新星の 1 回目: 動けるマスなら、ゴールに着くときはそのまま使い、そうでなければ、2 回目を選ぶ */
+function chooseNovaFirst(cell: Pos): void {
+  if (!legalPawnMoves(state).some((p) => p.x === cell.x && p.y === cell.y)) {
+    say('1 回目に動けないマス');
+    return;
+  }
+  if (cell.y === (state.turn === 0 ? 0 : state.size - 1)) {
+    play({ type: 'ability', id: 'nova', first: cell }); // 1 回目でゴール
+    return;
+  }
+  novaFirst = cell;
+  mode = 'nova2';
+  say('2 回目の行き先を選ぶ（1 回目のマスをもう一度押すと、選び直す）');
+  refresh();
+}
+
+/** 超新星の 2 回目: 1 回目のマスを押すと、選び直す。動けるマスなら、2 回動く */
+function chooseNovaSecond(cell: Pos): void {
+  const first = novaFirst;
+  if (first === null) return;
+  if (cell.x === first.x && cell.y === first.y) {
+    novaFirst = null;
+    mode = 'nova1';
+    say('1 回目の行き先を選ぶ');
+    refresh();
+    return;
+  }
+  play({ type: 'ability', id: 'nova', first, second: cell });
+}
+
 const stage = el('stage');
 let keyAtDown = '';
 
@@ -285,18 +376,21 @@ stage.addEventListener('pointerdown', (e) => {
 
 stage.addEventListener('pointerup', (e) => {
   if (busy || state.winner !== null) return;
-  if (mode === 'move' || mode === 'diagonal' || mode === 'leap') {
+  if (mode === 'move' || mode === 'diagonal' || mode === 'leap' || mode === 'nova1' || mode === 'nova2') {
     const p = view.pick(e.clientX, e.clientY);
     if (p === null) return;
     const cell = nearestCell(state.size, p.bx, p.by);
     if (cell === null) return;
-    play(mode === 'move' ? { type: 'move', to: cell } : { type: 'ability', id: mode, to: cell });
+    if (mode === 'move') play({ type: 'move', to: cell });
+    else if (mode === 'nova1') chooseNovaFirst(cell);
+    else if (mode === 'nova2') chooseNovaSecond(cell);
+    else play({ type: 'ability', id: mode, to: cell });
     return;
   }
-  // 壁・回収: マウスは予告が出ているのでそのまま確定。タッチは 1 回目で予告、同じ場所をもう一度押すと確定
+  // 壁・回収・鉄壁・虚無: マウスは予告が出ているのでそのまま確定。タッチは 1 回目で予告、同じ場所をもう一度押すと確定
   if (ghost !== null && ghostKey(ghost) === keyAtDown) {
-    if (mode === 'wall') play({ type: 'wall', x: ghost.x, y: ghost.y, o: ghost.o });
-    else play({ type: 'ability', id: 'reclaim', wall: ghost });
+    if (mode === 'wall') play(ghost.half === undefined ? { type: 'wall', x: ghost.x, y: ghost.y, o: ghost.o } : { type: 'wall', x: ghost.x, y: ghost.y, o: ghost.o, half: ghost.half });
+    else if (isWallPick(mode)) play({ type: 'ability', id: mode, wall: ghost });
   } else if (ghost !== null) {
     const problem = mode === 'wall' ? wallProblem(state, ghost) : null;
     say(problem === null ? 'もう一度押すと決まる' : `置けない: ${problem}`);
@@ -308,6 +402,13 @@ btnWall.addEventListener('click', () => setMode('wall'));
 btnRotate.addEventListener('click', () => {
   if (busy) return;
   orient = orient === 'h' ? 'v' : 'h';
+  refresh();
+});
+btnLength.addEventListener('click', () => {
+  if (busy) return;
+  shortMode = !shortMode;
+  mode = 'wall'; // 長さを選ぶのは、壁を置くとき
+  say(shortMode ? '短い壁（1 マス分）で置く' : '');
   refresh();
 });
 btnUndo.addEventListener('click', () => {
