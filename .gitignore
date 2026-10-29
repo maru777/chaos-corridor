@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+*.log
+
+# 実験・一時ファイル
+works/*/scratch/
+
+# この PC 固有（説明用の README だけ追跡する）
+/tools/*
+!/tools/README.md
+/backup/*
+!/backup/README.md
+/release/*
+!/release/README.md
