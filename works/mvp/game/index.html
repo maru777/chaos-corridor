@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ケイオスコリドール</title>
+    <style>
+      :root {
+        --p0: #38d9ff;
+        --p1: #ff4fb8;
+        --ink: #e8f0ff;
+        --panel: rgba(8, 12, 30, 0.72);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: #02030a; color: var(--ink); font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; overflow: hidden; }
+      #stage { position: fixed; inset: 0; touch-action: none; }
+      #stage canvas { display: block; width: 100%; height: 100%; }
+      .hud { position: fixed; left: 0; right: 0; padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; pointer-events: none; }
+      .hud > * { pointer-events: auto; }
+      #top { top: 0; }
+      #bottom { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+      .panel { background: var(--panel); border: 1px solid rgba(160, 190, 255, 0.25); border-radius: 12px; padding: 8px 14px; backdrop-filter: blur(6px); }
+      #status { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+      #status[data-turn="0"] { color: var(--p0); }
+      #status[data-turn="1"] { color: var(--p1); }
+      #msg { min-height: 1.4em; font-size: 14px; color: #ffd27a; }
+      button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid rgba(160, 190, 255, 0.35); border-radius: 10px; padding: 10px 16px; min-height: 44px; cursor: pointer; }
+      button[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); border-color: #8fb0ff; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      #hash { font-size: 11px; opacity: 0.55; }
+      #msg-panel:has(#msg:empty) { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="top" class="hud">
+      <div class="panel"><span id="status" data-turn="0"></span></div>
+      <div class="panel" id="msg-panel"><span id="msg"></span></div>
+    </div>
+    <div id="bottom" class="hud">
+      <button id="btn-move" aria-pressed="true">移動</button>
+      <button id="btn-wall" aria-pressed="false">壁を置く</button>
+      <button id="btn-rotate">壁の向き: 横</button>
+      <button id="btn-undo">1 手戻す</button>
+      <button id="btn-reset">最初から</button>
+      <span id="hash" class="panel"></span>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
