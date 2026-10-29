@@ -52,20 +52,24 @@
       .cutin.legendary { --rc: #ffd46a; --dim: 0.92; --name-size: min(92px, 20vw); }
 
       /* 帯は、画面の左右いっぱいに広げる（端が斜めの線に見えないように、傾けない） */
-      .cutin-band { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; animation: cutin-slide calc(var(--dur) - var(--band-delay, 0ms)) cubic-bezier(0.2, 0.8, 0.2, 1) var(--band-delay, 0ms) both; }
+      /* 帯の塗り（.cutin-band）と文字（.cutin-text）は別の層。文字は、風・雷などの効果より手前に置き、効果が文字に重ならないようにする */
+      .cutin-band, .cutin-text { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); animation: cutin-slide calc(var(--dur) - var(--band-delay, 0ms)) cubic-bezier(0.2, 0.8, 0.2, 1) var(--band-delay, 0ms) both; }
+      .cutin-band { isolation: isolate; }
+      .cutin-text { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
       .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
-        background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 45%, #03040c), color-mix(in srgb, var(--rc) 80%, #03040c) 50%, color-mix(in srgb, var(--rc) 45%, #03040c)); }
+        /* 両端は明るく、文字のある中央は暗くして、文字を読みやすくする */
+        background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 70%, #03040c), color-mix(in srgb, var(--rc) 34%, #03040c) 50%, color-mix(in srgb, var(--rc) 70%, #03040c)); }
       /* LEGENDARY だけは、帯の塗りを透明にして、金色の細い線と、光る文字だけで見せる */
       .cutin.legendary .cutin-band::before { border-block: 0; box-shadow: none;
         background: linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) top / 100% 2px no-repeat, linear-gradient(90deg, transparent, var(--rc) 18%, var(--rc) 82%, transparent) bottom / 100% 2px no-repeat; }
-      .cutin.legendary .cutin-name { text-shadow: 0 0 10px #fff3b0, 0 0 26px var(--rc), 0 0 60px var(--rc), 0 2px 18px rgba(0, 0, 0, 0.8); }
+      .cutin.legendary .cutin-name { color: #fff8d0; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 0 22px var(--rc), 0 0 52px var(--rc); }
       /* 帯の色が明るくなったので、文字は白で、影をつけて読みやすくする */
-      .cutin-reading { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); }
-      .cutin-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.35em; color: var(--rc); text-shadow: 0 0 8px var(--rc); }
-      .cutin-player { color: var(--pc); text-shadow: 0 0 8px var(--pc); }
+      /* 文字は、すべて白系にして、黒い縁取りと影をつける（帯や効果の色と重ならないように） */
+      .cutin-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.35em; color: #fff; -webkit-text-stroke: 3px rgba(0, 0, 0, 0.55); paint-order: stroke fill; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+      .cutin-player { color: var(--pc); }
       /* 名前の文字数が多いほど、画面の幅に収まるよう小さくする（--chars は cutin.ts が設定） */
-      .cutin-name { font-size: min(var(--name-size), calc(88vw / (var(--chars) * 1.25))); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 14px var(--c), 0 0 32px var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
-      .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
+      .cutin-name { font-size: min(var(--name-size), calc(88vw / (var(--chars) * 1.25))); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; -webkit-text-stroke: 0.12em rgba(0, 0, 0, 0.55); paint-order: stroke fill; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 0, 0, 0.6); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
+      .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: #eef3ff; -webkit-text-stroke: 0.2em rgba(0, 0, 0, 0.5); paint-order: stroke fill; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
 
       /* 画面を暗くする色も、レア度の色に寄せる（暗い緑・青・紫・金） */
       .cutin-dim { position: absolute; inset: 0; animation: cutin-dim var(--dur) ease both;
@@ -161,7 +165,7 @@
       /* OS の「視差効果を減らす」設定では、点滅・飛び散り・光の縁をなくし、帯は動かさず出し入れだけにする */
       @media (prefers-reduced-motion: reduce) {
         .cutin-flash, .cutin-p, .cutin-edge, .fx-layer, .fx-strike-flash { display: none !important; }
-        .cutin-band { animation-name: cutin-fadeio; }
+        .cutin-band, .cutin-text { animation-name: cutin-fadeio; }
         .cutin-name, .cutin-reading { animation: none; }
       }
 

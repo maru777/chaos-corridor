@@ -76,11 +76,12 @@ export function playCutIn(container: HTMLElement, opts: CutInOptions): Promise<v
   // 上の行: 使った人（その人の色）・レア度・属性
   const tag = el('span', 'cutin-rarity');
   tag.append(el('span', 'cutin-player', PLAYER_LABEL[opts.player]), ` ・ ${opts.rarity} ・ ${element.label}`);
-  const band = el('div', 'cutin-band');
-  band.append(tag, el('strong', 'cutin-name', opts.name), el('small', 'cutin-reading', `《${opts.reading}》`));
+  // 帯の塗りと文字は別の層にする。重ね順（下から）: 暗転・縁・後ろの効果・帯の塗り・前の効果・粒・文字・閃光
+  // 文字を、風や雷などの効果より手前に置いて、効果が文字に重ならないようにする
+  const text = el('div', 'cutin-text');
+  text.append(tag, el('strong', 'cutin-name', opts.name), el('small', 'cutin-reading', `《${opts.reading}》`));
 
-  root.append(el('div', 'cutin-dim'), el('div', 'cutin-edge'), ...layers.back, band, ...layers.front, el('div', 'cutin-flash'));
-
+  const particles: HTMLElement[] = [];
   for (let i = 0; i < timing.particles; i++) {
     const p = el('span', 'cutin-p');
     const angle = Math.random() * Math.PI * 2;
@@ -88,8 +89,19 @@ export function playCutIn(container: HTMLElement, opts: CutInOptions): Promise<v
     p.style.setProperty('--dx', `${Math.cos(angle) * dist}vmin`);
     p.style.setProperty('--dy', `${Math.sin(angle) * dist * 0.7}vmin`);
     p.style.setProperty('--s', String(0.5 + Math.random() * 1.2));
-    root.appendChild(p);
+    particles.push(p);
   }
+
+  root.append(
+    el('div', 'cutin-dim'),
+    el('div', 'cutin-edge'),
+    ...layers.back,
+    el('div', 'cutin-band'),
+    ...layers.front,
+    ...particles,
+    text,
+    el('div', 'cutin-flash'),
+  );
 
   container.appendChild(root);
   return new Promise((resolve) => {
