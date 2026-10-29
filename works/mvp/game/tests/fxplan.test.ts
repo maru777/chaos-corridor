@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RARITIES, createRng } from '../src';
 import { CUTIN_TIMING } from '../src/view/cutin';
-import { ELEMENT_OF, magicCircle, planDark, planWater, planWind, spiralPath, wavePath } from '../src/view/fxplan';
+import { ELEMENT_OF, crescentPath, magicCircle, planDark, planWater, planWind, wavePath } from '../src/view/fxplan';
 import type { Particle } from '../src/view/fxplan';
 import { VOICE_PARAMS, pickVoice } from '../src/view/voice';
 
@@ -23,11 +23,11 @@ describe('属性', () => {
 });
 
 describe('風', () => {
-  it('筋・渦・葉があり、位置と時間が有限で、渦は 3 重', () => {
+  it('筋・風の刃・葉があり、位置と時間が有限。刃は画面の外から外へ抜ける', () => {
     for (let seed = 1; seed <= 10; seed++) {
       const plan = planWind(createRng(seed), LAYOUT);
       expect(plan.streaks.length).toBeGreaterThanOrEqual(15);
-      expect(plan.swirls).toHaveLength(3);
+      expect(plan.blades.length).toBeGreaterThanOrEqual(6);
       expect(plan.leaves.length).toBeGreaterThanOrEqual(10);
       plan.leaves.forEach(finiteParticle);
       for (const s of plan.streaks) {
@@ -35,18 +35,19 @@ describe('風', () => {
         expect(s.durMs).toBeGreaterThan(0);
         expect(s.width).toBeGreaterThan(0);
       }
-      for (const w of plan.swirls) expect(w.spinMs).toBeGreaterThan(0);
+      for (const b of plan.blades) {
+        expect(b.d.startsWith('M')).toBe(true);
+        expect(b.d.endsWith('Z')).toBe(true);
+        expect(b.dx).toBeGreaterThan(LAYOUT.width);
+        expect(b.durMs).toBeGreaterThan(0);
+        expect(b.delayMs).toBeGreaterThanOrEqual(0);
+      }
     }
   });
 
-  it('渦巻き線は、中心から外へ広がる（半径が増え続ける）', () => {
-    const nums = (spiralPath(100, 100, 10, 200, 2, 0).match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
-    const first = Math.hypot((nums[0] as number) - 100, ((nums[1] as number) - 100) / 0.55);
-    const lastX = nums[nums.length - 2] as number;
-    const lastY = nums[nums.length - 1] as number;
-    const last = Math.hypot(lastX - 100, (lastY - 100) / 0.55);
-    expect(first).toBeCloseTo(10, 0);
-    expect(last).toBeCloseTo(200, 0);
+  it('三日月の刃は、尾から先端までが len で、外側の弧のほうが内側より反っている', () => {
+    const d = crescentPath(0, 100, 200, 40);
+    expect(d).toBe('M0.0 100.0 Q100.0 60.0 200.0 100.0 Q100.0 88.8 0.0 100.0 Z');
   });
 });
 

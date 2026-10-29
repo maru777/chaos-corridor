@@ -49,35 +49,29 @@ function when(rng: () => number, t: FxTiming, beforeMs: number, afterMs: number)
 
 // ---- 風 ----
 
-export interface Swirl {
-  /** 渦の線（中心から外へ巻く） */
+/** 風の刃（三日月形）。左から右へ、画面を高速で横切る */
+export interface Blade {
   readonly d: string;
-  readonly width: number;
-  /** 1 周する時間 */
-  readonly spinMs: number;
+  /** 動く距離（px）。画面の外から外へ抜ける */
+  readonly dx: number;
   readonly delayMs: number;
+  readonly durMs: number;
 }
 
 export interface WindPlan {
   /** 帯を横切って流れ続ける風の筋 */
   readonly streaks: readonly BoltSpec[];
-  /** 名前のまわりを回る風の渦 */
-  readonly swirls: readonly Swirl[];
+  /** 画面を横切る風の刃 */
+  readonly blades: readonly Blade[];
   /** 波打ちながら風に舞う葉 */
   readonly leaves: readonly Particle[];
 }
 
-/** 渦巻き線（アルキメデスのらせん）。中心 (cx, cy) から、半径 r0 → r1 へ、turns 回転しながら広がる */
-export function spiralPath(cx: number, cy: number, r0: number, r1: number, turns: number, startDeg = 0): string {
-  const steps = Math.max(8, Math.round(turns * 28));
-  let d = '';
-  for (let i = 0; i <= steps; i++) {
-    const f = i / steps;
-    const a = ((startDeg + f * turns * 360) * Math.PI) / 180;
-    const r = r0 + (r1 - r0) * f;
-    d += `${i === 0 ? 'M' : 'L'}${(cx + r * Math.cos(a)).toFixed(1)} ${(cy + r * Math.sin(a) * 0.55).toFixed(1)} `;
-  }
-  return d.trim();
+/** 三日月形の風の刃。(x0, y) の尾から、右へ len の先端まで。thick は反りの大きさ（外側の弧の高さ） */
+export function crescentPath(x0: number, y: number, len: number, thick: number): string {
+  const x1 = x0 + len;
+  const xm = x0 + len * 0.5;
+  return `M${x0.toFixed(1)} ${y.toFixed(1)} Q${xm.toFixed(1)} ${(y - thick).toFixed(1)} ${x1.toFixed(1)} ${y.toFixed(1)} Q${xm.toFixed(1)} ${(y - thick * 0.28).toFixed(1)} ${x0.toFixed(1)} ${y.toFixed(1)} Z`;
 }
 
 export function planWind(rng: () => number, layout: BoltLayout): WindPlan {
@@ -92,14 +86,16 @@ export function planWind(rng: () => number, layout: BoltLayout): WindPlan {
     const d = `M${x0.toFixed(1)} ${y.toFixed(1)} C${(layout.width * 0.3).toFixed(1)} ${c1y.toFixed(1)} ${(layout.width * 0.65).toFixed(1)} ${c2y.toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
     streaks.push({ d, delayMs: between(rng, 0, 900), durMs: between(rng, 650, 1200), width: i % 4 === 0 ? between(rng, 0.8, 1.2) : between(rng, 1.6, 3) });
   }
-  const cx = layout.width / 2;
-  const cy = layout.bandTop + layout.bandHeight / 2;
-  const swirls: Swirl[] = [0, 1, 2].map((i) => ({
-    d: spiralPath(cx, cy, layout.bandHeight * 0.25, layout.width * (0.3 + i * 0.05), 2.2, i * 120),
-    width: 2.6 - i * 0.4,
-    spinMs: 2600 + i * 900,
-    delayMs: i * 300,
-  }));
+  const blades: Blade[] = [];
+  for (let i = 0; i < 9; i++) {
+    const len = between(rng, 140, 320);
+    blades.push({
+      d: crescentPath(-len, between(rng, layout.bandTop - 60, layout.bandTop + layout.bandHeight + 60), len, between(rng, 18, 42)),
+      dx: layout.width + len * 2,
+      delayMs: between(rng, 0, 1200),
+      durMs: between(rng, 420, 760),
+    });
+  }
   const leaves: Particle[] = [];
   for (let i = 0; i < 16; i++) {
     leaves.push({
@@ -113,7 +109,7 @@ export function planWind(rng: () => number, layout: BoltLayout): WindPlan {
       durMs: between(rng, 1300, 2200),
     });
   }
-  return { streaks, swirls, leaves };
+  return { streaks, blades, leaves };
 }
 
 // ---- 水 ----

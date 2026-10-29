@@ -90,9 +90,8 @@
       /* 風（UNCOMMON）: 曲がった風の筋が帯を走り、葉が舞う */
       /* 風の筋は、演出の間ずっと、左から右へ流れ続ける（--delay は、繰り返しの途中から始めるためのずらし） */
       .fx-streak { fill: none; stroke: #e2ffec; stroke-linecap: round; stroke-dasharray: 0.22 1.78; filter: drop-shadow(0 0 5px var(--rc)); animation: fx-run var(--d) linear infinite; animation-delay: calc(var(--delay) * -1); }
-      /* 名前のまわりで、風の渦がゆっくり回る */
-      .fx-swirl { animation: fx-spin var(--spin) linear infinite; animation-delay: calc(var(--delay) * -1); }
-      .fx-swirl path { fill: none; stroke: var(--rc); stroke-linecap: round; opacity: 0.75; filter: drop-shadow(0 0 6px var(--rc)); stroke-dasharray: 14 10; }
+      /* 風の刃: 三日月形の風が、画面の外から外へ、高速で横切る（尾にいくほど薄く、白く光る） */
+      .fx-blade { fill: rgba(226, 255, 236, 0.9); stroke: #fff; stroke-width: 1; filter: drop-shadow(0 0 10px var(--rc)) drop-shadow(0 0 22px var(--rc)); animation: fx-blade-x var(--d) cubic-bezier(0.3, 0.1, 0.7, 0.9) infinite; animation-delay: calc(var(--delay) * -1); }
       /* 葉は、外側が横へ流れ続け、内側が波打ちながらひらひら回る */
       .fx-leaf { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: calc(var(--size) * 0.55); animation: fx-leaf-x var(--d) linear infinite; animation-delay: calc(var(--delay) * -1); }
       .fx-leaf-body { width: 100%; height: 100%; border-radius: 0 100% 0 100%; background: linear-gradient(135deg, #d4ffe2, var(--rc)); box-shadow: 0 0 10px var(--rc); animation: fx-leaf-flutter 900ms ease-in-out infinite; }
@@ -142,6 +141,7 @@
       /* 線の一部が、道に沿って先へ走っていく */
       @keyframes fx-run { 0% { stroke-dashoffset: 0.22; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { stroke-dashoffset: -1.78; opacity: 0; } }
       @keyframes fx-leaf-x { from { transform: translateX(0); } to { transform: translateX(var(--dx)); } }
+      @keyframes fx-blade-x { 0% { transform: translateX(0); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateX(var(--dx)); opacity: 0; } }
       @keyframes fx-leaf-flutter { 0%, 100% { transform: translateY(calc(var(--amp) * -1)) rotate(-35deg) scaleY(1); } 50% { transform: translateY(var(--amp)) rotate(40deg) scaleY(0.35); } }
       @keyframes fx-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
       @keyframes fx-pulse { 0% { opacity: 0.85; transform: scale(0.55); } 100% { opacity: 0; transform: scale(1.5); } }

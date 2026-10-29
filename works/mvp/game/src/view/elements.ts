@@ -83,16 +83,14 @@ function runningPath(svg: Element, className: string, s: BoltSpec): void {
 
 function wind(layout: BoltLayout, rng: () => number): ElementLayers {
   const plan = planWind(rng, layout);
-  const cx = layout.width / 2;
-  const cy = layout.bandTop + layout.bandHeight / 2;
   const svg = svgRoot(layout);
   for (const s of plan.streaks) runningPath(svg, 'fx-streak', s);
-  for (const s of plan.swirls) {
-    const g = svgChild(svg, 'g', { class: 'fx-swirl' });
-    g.style.transformOrigin = `${cx}px ${cy}px`;
-    g.style.setProperty('--spin', ms(s.spinMs));
-    g.style.setProperty('--delay', ms(s.delayMs));
-    svgChild(g, 'path', { d: s.d, 'stroke-width': String(s.width) });
+  // 風の刃: 三日月形が、画面の外から外へ、高速で横切る
+  for (const b of plan.blades) {
+    const blade = svgChild(svg, 'path', { class: 'fx-blade', d: b.d });
+    blade.style.setProperty('--dx', px(b.dx));
+    blade.style.setProperty('--d', ms(b.durMs));
+    blade.style.setProperty('--delay', ms(b.delayMs));
   }
   // 葉は、外側が横へ流れ、内側が波打って回る
   const leaves = plan.leaves.map((p) => {
