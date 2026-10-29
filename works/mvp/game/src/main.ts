@@ -1,7 +1,9 @@
-import { abilityDef, applyAction, legalDiagonalMoves, legalPawnMoves, newGame, reclaimableWalls, stateHash, wallProblem } from './index';
-import type { AbilityId, Action, GameState, Orientation, WallSpec } from './index';
+import { RARITIES, abilityDef, applyAction, legalDiagonalMoves, legalPawnMoves, newGame, reclaimableWalls, stateHash, wallProblem } from './index';
+import type { AbilityId, Action, GameState, Orientation, PlayerId, Rarity, WallSpec } from './index';
 import { BoardView } from './view/board3d';
+import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { nearestCell, nearestWallSlot } from './view/layout';
+import { playSfx } from './view/sfx';
 
 type Mode = 'move' | 'wall' | 'diagonal' | 'reclaim';
 
@@ -23,8 +25,11 @@ let log: Action[] = [];
 let mode: Mode = 'move';
 let orient: Orientation = 'h';
 let ghost: WallSpec | null = null;
+/** カットインの演出中は、操作を受け付けない */
+let busy = false;
 
 const view = new BoardView(el('stage'), state.size);
+const cutinsEl = el('cutins');
 const statusEl = el('status');
 const msgEl = el('msg');
 const hashEl = el('hash');
@@ -106,7 +111,21 @@ function renderAbilities(): void {
   }
 }
 
+/** カットイン・効果音・3D の演出をまとめて出す。見せ場（impact）で onImpact を呼び、終わると操作を再開する */
+function runEffect(name: string, reading: string, rarity: Rarity, player: PlayerId, onImpact?: () => void): void {
+  busy = true;
+  const timing = CUTIN_TIMING[rarity];
+  playSfx(rarity, timing.impactMs / 1000);
+  view.playImpact(rarity, timing.impactMs);
+  window.setTimeout(() => onImpact?.(), timing.impactMs);
+  void playCutIn(cutinsEl, { name, reading, rarity, player }).then(() => {
+    busy = false;
+    refresh();
+  });
+}
+
 function useAbility(id: AbilityId): void {
+  if (busy) return;
   const def = abilityDef(id);
   if (id === 'jam') {
     play({ type: 'ability', id: 'jam' });
@@ -150,15 +169,23 @@ function refresh(): void {
 }
 
 function play(action: Action): void {
+  if (busy) return;
   const r = applyAction(state, action);
   if (!r.ok) {
     say(`できない: ${r.reason}`);
     return;
   }
+  const mover = state.turn;
   state = r.state;
   log = [...log, action];
   say('');
   if (mode === 'diagonal' || mode === 'reclaim') mode = 'move';
+  if (action.type === 'ability') {
+    // 状態は確定済み。盤の見た目は、カットインの見せ場で切り替える
+    const def = abilityDef(action.id);
+    runEffect(def.name, def.reading, def.rarity, mover, refresh);
+    return;
+  }
   refresh();
 }
 
@@ -173,6 +200,7 @@ function replay(forSeed: number, actions: readonly Action[]): GameState {
 }
 
 function setMode(next: Mode): void {
+  if (busy) return;
   mode = next;
   say('');
   refresh();
@@ -181,15 +209,18 @@ function setMode(next: Mode): void {
 const stage = el('stage');
 let keyAtDown = '';
 
-stage.addEventListener('pointermove', (e) => updatePreview(e.clientX, e.clientY));
+stage.addEventListener('pointermove', (e) => {
+  if (!busy) updatePreview(e.clientX, e.clientY);
+});
 
 stage.addEventListener('pointerdown', (e) => {
+  if (busy) return;
   keyAtDown = ghostKey(ghost);
   updatePreview(e.clientX, e.clientY);
 });
 
 stage.addEventListener('pointerup', (e) => {
-  if (state.winner !== null) return;
+  if (busy || state.winner !== null) return;
   if (mode === 'move' || mode === 'diagonal') {
     const p = view.pick(e.clientX, e.clientY);
     if (p === null) return;
@@ -211,11 +242,12 @@ stage.addEventListener('pointerup', (e) => {
 btnMove.addEventListener('click', () => setMode('move'));
 btnWall.addEventListener('click', () => setMode('wall'));
 btnRotate.addEventListener('click', () => {
+  if (busy) return;
   orient = orient === 'h' ? 'v' : 'h';
   refresh();
 });
 btnUndo.addEventListener('click', () => {
-  if (log.length === 0) return;
+  if (busy || log.length === 0) return;
   log = log.slice(0, -1);
   state = replay(seed, log);
   mode = 'move';
@@ -223,6 +255,7 @@ btnUndo.addEventListener('click', () => {
   refresh();
 });
 btnReset.addEventListener('click', () => {
+  if (busy) return;
   seed = newSeed();
   state = newGame(seed);
   log = [];
@@ -231,7 +264,16 @@ btnReset.addEventListener('click', () => {
   refresh();
 });
 
+// 演出の確認用: ?debug を付けると、数字キー 1〜4 で、レア度ごとのカットインを試せる（対局には影響しない）
+if (new URLSearchParams(location.search).has('debug')) {
+  window.addEventListener('keydown', (e) => {
+    const rarity = RARITIES[Number(e.key) - 1];
+    if (rarity !== undefined && !busy) runEffect('混沌', 'ケイオス', rarity, state.turn);
+  });
+}
+
 window.addEventListener('keydown', (e) => {
+  if (busy) return;
   if (e.key === 'r' || e.key === 'R') {
     orient = orient === 'h' ? 'v' : 'h';
     refresh();

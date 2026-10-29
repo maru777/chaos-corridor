@@ -6,10 +6,15 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { goalRow } from '../board';
 import type { GameState, Pos, WallSpec } from '../types';
+import type { Rarity } from '../abilities';
 import { CINEMA_SHADER, glowMaterial, makeGlowTexture } from './fx';
+import { IMPACT_TAIL_MS, impactFrame } from './impact';
 import { cellToWorld, wallToWorld, worldToBoard } from './layout';
 import { createSpace } from './space';
 import type { Space } from './space';
+
+const BASE_FOV = 45;
+const BASE_BLOOM = 0.55;
 
 const PLAYER_COLORS = [0x38d9ff, 0xff4fb8] as const;
 const WALL_LENGTH = 1.9;
@@ -26,7 +31,13 @@ export interface BoardPoint {
 export class BoardView {
   private readonly size: number;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+  private readonly camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 200);
+  private readonly basePos = new THREE.Vector3();
+  private impact: { rarity: Rarity; startedAt: number; impactMs: number } | null = null;
+  private simTime = 0;
+  private lastTime = 0;
+  private lastFov = BASE_FOV;
+  private readonly reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true });
   private readonly raycaster = new THREE.Raycaster();
   private readonly plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -73,7 +84,7 @@ export class BoardView {
     // 光る物（壁・コマ・目印）がにじむ
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 0.9);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), BASE_BLOOM, 0.5, 0.9);
     this.composer.addPass(this.bloom);
     this.cinema = new ShaderPass(CINEMA_SHADER);
     this.composer.addPass(this.cinema);
@@ -257,24 +268,67 @@ export class BoardView {
     const portrait = this.camera.aspect < 1;
     const k = Math.max(1, (portrait ? 0.98 : 0.92) / this.camera.aspect);
     // 横長は低めの角度にして、奥に天の川が見えるようにする
-    this.camera.position.set(0, (portrait ? 10.5 : 7.5) * k, (portrait ? 9.5 : 11.5) * k);
+    this.basePos.set(0, (portrait ? 10.5 : 7.5) * k, (portrait ? 9.5 : 11.5) * k);
+    this.camera.position.copy(this.basePos);
     this.camera.lookAt(0, 0, 0.3);
     this.camera.updateProjectionMatrix();
   }
 
+  /** 能力を使った瞬間の演出（光のにじみ・ズーム・揺れ・スロー）を始める。impactMs は見せ場までの時間 */
+  playImpact(rarity: Rarity, impactMs: number): void {
+    this.impact = { rarity, startedAt: performance.now(), impactMs };
+  }
+
   private frame(time: number): void {
+    const real = this.lastTime === 0 ? 0 : Math.min(time - this.lastTime, 100);
+    this.lastTime = time;
+
+    let glow = 0;
+    let zoom = 0;
+    let shake = 0;
+    let scale = 1;
+    if (this.impact !== null) {
+      const elapsed = time - this.impact.startedAt;
+      if (elapsed > this.impact.impactMs + IMPACT_TAIL_MS) {
+        this.impact = null;
+      } else {
+        const f = impactFrame(this.impact.rarity, elapsed, this.impact.impactMs, this.reducedMotion);
+        glow = f.glow;
+        zoom = f.zoomDeg;
+        shake = f.shake;
+        scale = f.timeScale;
+      }
+    }
+    this.simTime += real * scale;
+    const t = this.simTime;
+
     for (let p = 0; p < 2; p++) {
       const pawn = this.pawns[p] as THREE.Group;
       pawn.position.lerp(this.pawnTargets[p] as THREE.Vector3, 0.2);
-      pawn.position.y = 0.34 + Math.sin(time / 500 + p * 2) * 0.04;
+      pawn.position.y = 0.34 + Math.sin(t / 500 + p * 2) * 0.04;
     }
     this.pawnRings.forEach((r, i) => {
-      r.scale.setScalar(1 + Math.sin(time / 400 + i) * 0.06);
+      r.scale.setScalar(1 + Math.sin(t / 400 + i) * 0.06);
     });
     this.cinema.uniforms['uTime']!.value = time / 1000;
-    const pulse = 1 + Math.sin(time / 250) * 0.12;
+    const pulse = 1 + Math.sin(t / 250) * 0.12;
     for (const m of this.markerGroup.children) m.scale.setScalar(pulse);
-    this.space.update(time);
+
+    // カメラ: ズーム（視野角をせばめる）と揺れ（位置をずらす）
+    const fov = BASE_FOV - zoom;
+    if (fov !== this.lastFov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+      this.lastFov = fov;
+    }
+    this.camera.position.set(
+      this.basePos.x + (Math.random() - 0.5) * 2 * shake,
+      this.basePos.y + (Math.random() - 0.5) * 2 * shake,
+      this.basePos.z,
+    );
+    this.bloom.strength = BASE_BLOOM + glow;
+
+    this.space.update(t);
     this.composer.render();
   }
 }

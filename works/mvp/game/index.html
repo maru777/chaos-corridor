@@ -38,10 +38,53 @@
       button.ability.rare { border-color: #6aa8ff; }
       button.ability.epic { border-color: #c58cff; }
       button.ability.legendary { border-color: #ffd46a; }
-      button.ability[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); }    </style>
+      button.ability[aria-pressed="true"] { background: rgba(80, 130, 255, 0.45); }
+
+      /* カットイン（能力を使ったときの演出）。レア度が高いほど、大きく・長く・派手になる */
+      #cutins { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+      .cutin { position: absolute; inset: 0; overflow: hidden; --c: #38d9ff; --rc: #7fe0a0; --band-h: 86px; --name-size: min(34px, 9vw); }
+      .cutin[data-player="1"] { --c: #ff4fb8; }
+      .cutin.uncommon { --rc: #7fe0a0; }
+      .cutin.rare { --rc: #6aa8ff; --band-h: 124px; --name-size: min(48px, 12vw); }
+      .cutin.epic { --rc: #c58cff; --band-h: 180px; --name-size: min(68px, 16vw); }
+      .cutin.legendary { --rc: #ffd46a; --band-h: 240px; --name-size: min(92px, 20vw); }
+
+      .cutin-band { position: absolute; left: 0; right: 0; top: 36%; height: var(--band-h); isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; animation: cutin-slide var(--dur) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+      .cutin-band::before { content: ""; position: absolute; inset: 0; z-index: -1; transform: skewX(-12deg); border-block: 2px solid var(--rc); box-shadow: 0 0 28px var(--c);
+        background: linear-gradient(90deg, transparent 0, color-mix(in srgb, var(--c) 55%, #05081a) 14%, color-mix(in srgb, var(--c) 35%, #05081a) 86%, transparent 100%); }
+      .cutin-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.35em; color: var(--rc); text-shadow: 0 0 8px var(--rc); }
+      .cutin-name { font-size: var(--name-size); line-height: 1.1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 14px var(--c), 0 0 32px var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 260ms) both; }
+      .cutin-reading { font-size: calc(var(--name-size) * 0.38); letter-spacing: 0.3em; color: var(--c); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
+
+      .cutin-dim { position: absolute; inset: 0; display: none; background: radial-gradient(circle, rgba(0, 0, 12, 0.35), rgba(0, 0, 12, 0.82)); }
+      .cutin.epic .cutin-dim, .cutin.legendary .cutin-dim { display: block; animation: cutin-fade var(--dur) ease both; }
+      .cutin-edge { position: absolute; inset: 0; display: none; box-shadow: inset 0 0 90px 10px var(--c); animation: cutin-edge var(--dur) ease both; }
+      .cutin.rare .cutin-edge, .cutin.epic .cutin-edge { display: block; }
+      .cutin.legendary .cutin-edge { display: block; box-shadow: inset 0 0 150px 34px var(--rc); }
+      .cutin-flash { position: absolute; inset: 0; display: none; opacity: 0; background: radial-gradient(circle, #fff 0, color-mix(in srgb, var(--rc) 60%, #fff) 40%, transparent 78%); }
+      .cutin.epic .cutin-flash { display: block; --flash: 0.35; animation: cutin-flash 600ms ease-out calc(var(--impact) - 60ms) both; }
+      .cutin.legendary .cutin-flash { display: block; --flash: 0.85; animation: cutin-flash 800ms ease-out calc(var(--impact) - 60ms) both; }
+      .cutin-p { position: absolute; left: 50%; top: 46%; width: 8px; height: 8px; border-radius: 50%; background: var(--rc); box-shadow: 0 0 10px var(--rc); animation: cutin-burst 950ms ease-out var(--impact) both; }
+      .cutin-p:nth-child(3n) { background: #fff; }
+      .cutin-p:nth-child(3n + 1) { background: var(--c); }
+
+      @keyframes cutin-slide { 0% { transform: translateX(-105%); opacity: 0; } 14% { transform: translateX(0); opacity: 1; } 80% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(105%); opacity: 0; } }
+      @keyframes cutin-name-pop { from { transform: scale(1.7); opacity: 0; filter: blur(8px); } to { transform: scale(1); opacity: 1; filter: blur(0); } }
+      @keyframes cutin-fade { 0% { opacity: 0; } 12% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes cutin-edge { 0% { opacity: 0; } 25% { opacity: 0.9; } 100% { opacity: 0; } }
+      @keyframes cutin-flash { 0% { opacity: 0; } 15% { opacity: var(--flash, 0.5); } 100% { opacity: 0; } }
+      @keyframes cutin-burst { 0% { opacity: 1; transform: translate(-50%, -50%) scale(var(--s)); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); } }
+
+      /* OS の「視差効果を減らす」設定では、点滅・飛び散り・光の縁をなくし、帯は動かさず出し入れだけにする */
+      @media (prefers-reduced-motion: reduce) {
+        .cutin-flash, .cutin-p, .cutin-edge { display: none !important; }
+        .cutin-band { animation-name: cutin-fade; }
+        .cutin-name, .cutin-reading { animation: none; }
+      }    </style>
   </head>
   <body>
     <div id="stage"></div>
+    <div id="cutins" aria-hidden="true"></div>
     <div id="top" class="hud">
       <div class="panel"><span id="status" data-turn="0"></span></div>
       <div class="panel" id="msg-panel"><span id="msg"></span></div>
