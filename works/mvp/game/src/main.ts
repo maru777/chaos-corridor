@@ -198,16 +198,21 @@ function renderHand(): void {
     }
     return;
   }
-  const count = handCount(state, state.turn);
-  if (count === 0) {
-    abilitiesEl.appendChild(div('hand-hint', '使える能力は、もうない'));
-    return;
-  }
-  const cards = visibleCards(state, state.turn, true, debugShowAll) ?? [];
+  const left = visibleCards(state, state.turn, true, debugShowAll) ?? [];
+  // 配られた手札（使ったものも、灰色で残す）。使った枚数は、配られた手札と今の手札の差
+  const cards = debugShowAll ? left : newGame(seed).abilities[state.turn];
+  const remaining = [...left];
+  const spent = new Set<number>();
+  cards.forEach((id, i) => {
+    const at = remaining.indexOf(id);
+    if (at < 0) spent.add(i);
+    else remaining.splice(at, 1);
+  });
+  abilitiesEl.appendChild(div('hand-count', `残り ${handCount(state, state.turn)} / ${cards.length} 回`));
   // 今の盤で、実際に使える技（使える行動が 1 つでもあるもの）
   const usable = new Set<AbilityId>();
   for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
-  for (const id of cards) {
+  for (const [i, id] of cards.entries()) {
     const def = abilityDef(id);
     const b = document.createElement('button');
     b.className = `acard ${def.rarity.toLowerCase()}`;
@@ -225,7 +230,11 @@ function renderHand(): void {
     reading.textContent = def.reading;
     b.append(rar, plate, name, reading);
     // 今は使えない技（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
-    if (!usable.has(id)) b.disabled = true;
+    if (spent.has(i)) {
+      b.disabled = true;
+      b.classList.add('spent');
+      b.setAttribute('aria-label', `${def.name}。使用済み`);
+    } else if (!usable.has(id)) b.disabled = true;
     const showDesc = () => {
       handDescEl.textContent = armedAbility === id ? `${def.text}（もう一度タップで使う）` : def.text;
     };

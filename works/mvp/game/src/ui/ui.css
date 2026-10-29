@@ -85,6 +85,9 @@
 .acard:active:not(:disabled) { transform: translateY(2px) scale(0.98); box-shadow: 2px 2px 0 var(--ink2); }
 .acard[aria-pressed="true"] { outline: 4px solid #fff; outline-offset: 2px; transform: translateY(-8px) rotate(0deg) scale(1.06); }
 .acard:disabled { filter: grayscale(0.85) brightness(0.8); box-shadow: 2px 2px 0 var(--ink2); }
+#abilities .hand-count { flex-basis: 100%; text-align: center; font-size: 12px; font-weight: 900; color: #fff; -webkit-text-stroke: 3px var(--ink2); paint-order: stroke fill; }
+.acard.spent { filter: grayscale(1) brightness(0.55); opacity: 0.75; }
+.acard.spent::after { content: "使用済み"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-12deg); padding: 1px 8px; border: 2px solid #fff; border-radius: 6px; background: rgba(5, 3, 15, 0.85); color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; }
 .acard:disabled::before { animation: none; opacity: 0; }
 
 .card-back { width: 70px; height: 96px; border: 3px solid var(--ink2); border-radius: 11px; box-shadow: 4px 4px 0 var(--ink2); display: grid; place-items: center;
