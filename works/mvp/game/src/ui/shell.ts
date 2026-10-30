@@ -20,6 +20,8 @@ export interface ShellOptions {
   readonly onStart: (choice: MatchChoice, closeMenu: () => void) => void;
   /** 「最初からやりなおす」が押されたとき */
   /** closeMenu は、暗転した裏で、メニューを閉じるために呼ぶ */
+  /** ショップを開くとき、中身を作る */
+  readonly renderShop: () => void;
   readonly onRestart: (closeMenu: () => void) => void;
 }
 
@@ -42,6 +44,7 @@ export function createShell(opts: ShellOptions): Shell {
   const codex = byId('codex');
   const rules = byId('rules');
   const levels = byId('levels');
+  const shop = byId('shop');
 
   // CPU の段階の選択肢
   const levelList = byId('levels-list');
@@ -104,6 +107,7 @@ export function createShell(opts: ShellOptions): Shell {
 
   function openModal(m: HTMLElement): void {
     if (m === codex) renderCodex(byId('codex-body'));
+    if (m === shop) opts.renderShop();
     if (m === levels) {
       // 強さの札の左右は、開くたびに、ばらばらにする
       for (const b of levelList.children) (b as HTMLElement).style.setProperty('--ox', `${Math.round(Math.random() * 20)}%`);
@@ -136,6 +140,9 @@ export function createShell(opts: ShellOptions): Shell {
       case 'restart':
         opts.onRestart(() => dispatch('resume'));
         break;
+      case 'shop':
+        openModal(shop);
+        break;
       case 'codex':
         openModal(codex);
         break;
@@ -161,10 +168,11 @@ export function createShell(opts: ShellOptions): Shell {
     if (phase === 'splash' || phase === 'slam') dispatch('tap');
   });
 
+  byId('shop-close').addEventListener('click', () => closeModal(shop));
   byId('levels-close').addEventListener('click', () => closeModal(levels));
   byId('codex-close').addEventListener('click', () => closeModal(codex));
   byId('rules-close').addEventListener('click', () => closeModal(rules));
-  for (const m of [codex, rules, levels]) {
+  for (const m of [codex, rules, levels, shop]) {
     m.addEventListener('click', (e) => {
       if (e.target === m) closeModal(m); // 枠の外を押したら閉じる
     });
@@ -172,7 +180,8 @@ export function createShell(opts: ShellOptions): Shell {
 
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!levels.hidden) closeModal(levels);
+    if (!shop.hidden) closeModal(shop);
+    else if (!levels.hidden) closeModal(levels);
     else if (!codex.hidden) closeModal(codex);
     else if (!rules.hidden) closeModal(rules);
     else if (phase === 'menu' && started) dispatch('resume');
@@ -181,7 +190,7 @@ export function createShell(opts: ShellOptions): Shell {
   setPhase(phase);
 
   return {
-    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden || !levels.hidden,
+    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden || !levels.hidden || !shop.hidden,
     openMenu: () => dispatch('openMenu'),
     openCodex: () => openModal(codex),
   };

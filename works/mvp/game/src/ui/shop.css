@@ -1,0 +1,13 @@
+/* ショップ（赤と黒の漫画） */
+.gold-chip { margin-left: auto; margin-right: 10px; padding: 2px 16px 4px; background: #ffd46a; color: #05030f; font-weight: 900; font-style: italic; font-size: 18px; transform: skewX(-10deg); box-shadow: 3px 3px 0 #d4001a; }
+.shop-h { margin: 12px 0 6px; padding: 0 12px; display: inline-block; background: #05030f; color: #fff; font-style: italic; font-size: 15px; transform: skewX(-10deg); }
+.shop-list { display: flex; flex-direction: column; gap: 8px; }
+.shop-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: #fff; border: 3px solid #05030f; box-shadow: 4px 4px 0 #05030f; }
+.shop-item.on { background: #fff3c4; }
+.shop-info { display: flex; flex-direction: column; flex: 1; }
+.shop-info strong { font-size: 16px; }
+.shop-info small { font-size: 12px; color: #555; }
+.swatch { width: 56px; height: 40px; flex: none; border: 3px solid #05030f; }
+.swatch.piece { border-radius: 8px; }
+.shop-btn { min-width: 88px; background: #d4001a; color: #fff; border-radius: 0; font-style: italic; }
+.shop-btn:disabled { background: #bbb; color: #555; }

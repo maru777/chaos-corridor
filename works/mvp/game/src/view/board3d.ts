@@ -31,6 +31,14 @@ const SHORT_COLOR = 0x5fe0ff;
 const REAL_WALL_COLORS = new Set<number>([WALL_COLOR, IRON_COLOR, SHORT_COLOR]);
 const SHORT_LENGTH = 0.92;
 
+/** 色（0xRRGGBB）の明るさを、k 倍にする */
+function scaleColor(c: number, k: number): number {
+  const r = Math.round(((c >> 16) & 255) * k);
+  const g = Math.round(((c >> 8) & 255) * k);
+  const b = Math.round((c & 255) * k);
+  return (r << 16) | (g << 8) | b;
+}
+
 export interface BoardPoint {
   readonly bx: number;
   readonly by: number;
@@ -55,6 +63,11 @@ export class BoardView {
   private readonly meteorGroup = new THREE.Group();
   private readonly digitTextures = new Map<number, THREE.Texture>();
   private readonly pawns: THREE.Group[] = [];
+  /** 見た目の差し替え（ショップで買ったもの）: 盤のマスの色、縁の光、コマの色 */
+  private readonly tileMeshes: { mesh: THREE.Mesh; row: number }[] = [];
+  private rimMaterial: THREE.MeshBasicMaterial | undefined;
+  private pawnColors: [number, number] = [PLAYER_COLORS[0], PLAYER_COLORS[1]];
+  private boardSkin: { tile: number; tileEmissive: number; rim: number } = { tile: 0x22408a, tileEmissive: 0x0a1a48, rim: 0xbcd4ff };
   private readonly pawnRings: THREE.Mesh[] = [];
   private readonly pawnTargets: THREE.Vector3[] = [];
   private readonly space: Space;
@@ -103,7 +116,7 @@ export class BoardView {
     this.composer.addPass(new OutputPass());
 
     for (let p = 0; p < 2; p++) {
-      const pawn = this.makePawn(PLAYER_COLORS[p] as number);
+      const pawn = this.makePawn(this.pawnColors[p] as number);
       pawn.position.y = 0.34;
       this.pawns.push(pawn);
       this.pawnTargets.push(pawn.position.clone());
@@ -124,16 +137,16 @@ export class BoardView {
     const tileGeo = new THREE.BoxGeometry(0.94, 0.08, 0.94);
     for (let y = 0; y < this.size; y++) {
       for (let x = 0; x < this.size; x++) {
-        let color = 0x22408a;
-        let emissive = 0x0a1a48;
+        let color = this.boardSkin.tile;
+        let emissive = this.boardSkin.tileEmissive;
         let opacity = 0.32;
         if (y === goalRow(this.size, 0)) {
-          color = 0xffc21c;
-          emissive = 0x8a4f00;
+          color = this.pawnColors[0];
+          emissive = scaleColor(this.pawnColors[0], 0.5);
           opacity = 0.8; // 黄色は、青い背景に溶けやすいので、少し濃くする
         } else if (y === goalRow(this.size, 1)) {
-          color = 0xb8208a;
-          emissive = 0x8a0a62;
+          color = this.pawnColors[1];
+          emissive = scaleColor(this.pawnColors[1], 0.5);
           opacity = 0.55;
         }
         const mat = new THREE.MeshPhysicalMaterial({
@@ -151,6 +164,7 @@ export class BoardView {
         const tile = new THREE.Mesh(tileGeo, mat);
         const w = cellToWorld(this.size, x, y);
         tile.position.set(w.x, -0.04, w.z);
+        this.tileMeshes.push({ mesh: tile, row: y });
         this.scene.add(tile);
       }
     }
@@ -167,7 +181,8 @@ export class BoardView {
       this.scene.add(across, down);
     }
     // 縁は、太い黒縁の中に、細い光の線（光る表現は残す）
-    const rimGlow = glowMaterial(0xbcd4ff, 0.95);
+    const rimGlow = glowMaterial(this.boardSkin.rim, 0.95);
+    this.rimMaterial = rimGlow;
     const long = this.size + 0.2;
     for (const horizontal of [true, false]) {
       for (const side of [1, -1]) {
@@ -335,7 +350,7 @@ export class BoardView {
       this.meteorGroup.add(ground, meteor);
     }
     this.markerGroup.clear();
-    const color = PLAYER_COLORS[state.turn] as number;
+    const color = this.pawnColors[state.turn] as number;
     for (const m of legalMoves) {
       // 動ける先の目印: 黒縁つきの色の輪
       const marker = new THREE.Group();
@@ -377,6 +392,34 @@ export class BoardView {
     const hit = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.plane, hit) === null) return null;
     return worldToBoard(this.size, hit.x, hit.z);
+  }
+
+  /** ショップで買った見た目に変える（盤の色・縁の光・コマの色）。ルールには関係ない */
+  setSkin(board: { tile: number; tileEmissive: number; rim: number }, pieceColors: readonly [number, number]): void {
+    this.boardSkin = board;
+    this.pawnColors = [pieceColors[0], pieceColors[1]];
+    for (const { mesh, row } of this.tileMeshes) {
+      const mat = mesh.material as THREE.MeshPhysicalMaterial;
+      if (row === goalRow(this.size, 0)) {
+        mat.color.setHex(this.pawnColors[0]);
+        mat.emissive.setHex(scaleColor(this.pawnColors[0], 0.5));
+      } else if (row === goalRow(this.size, 1)) {
+        mat.color.setHex(this.pawnColors[1]);
+        mat.emissive.setHex(scaleColor(this.pawnColors[1], 0.5));
+      } else {
+        mat.color.setHex(board.tile);
+        mat.emissive.setHex(board.tileEmissive);
+      }
+    }
+    this.rimMaterial?.color.setHex(board.rim);
+    for (let p = 0; p < 2; p++) {
+      const old = this.pawns[p] as THREE.Group;
+      const next = this.makePawn(this.pawnColors[p] as number);
+      next.position.copy(old.position);
+      this.scene.remove(old);
+      this.scene.add(next);
+      this.pawns[p] = next;
+    }
   }
 
   /** 画面の上・下に出ている表示の高さ（ピクセル）を返す関数。盤が、それに被らない範囲に収まるようにする */

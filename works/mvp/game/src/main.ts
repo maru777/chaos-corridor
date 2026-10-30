@@ -28,13 +28,18 @@ import { shout, stopVoice } from './view/voice';
 import './ui/ui.css';
 import './ui/scenes.css';
 import './ui/persona.css';
+import './ui/shop.css';
 import { handCount, visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
 import { coverScreen, revealScreen } from './ui/curtain';
 import { playDraws } from './ui/draw';
+import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
+import { loadWallet, saveWallet } from './save';
+import { currentSkin, earn, goldFor } from './shop';
+import type { Wallet } from './shop';
 
 /** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
 type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | 'reclaim' | 'aegis' | 'void';
@@ -89,6 +94,11 @@ let cpuSeat: PlayerId | null = null;
 let tossing = false;
 let cpuReadyAt = 0;
 
+/** Gold と持ち物（この端末のブラウザに保存） */
+let wallet: Wallet = loadWallet();
+/** この対局の Gold を、もう受け取ったか */
+let awarded = false;
+
 /** 手札で選んでいる（次のタップで使う）能力 */
 let armedAbility: AbilityId | null = null;
 /** デバッグ: 手札を、全部見えるようにする */
@@ -104,6 +114,11 @@ let keepAbilities = false;
 
 const view = new BoardView(el('stage'), state.size);
 view.setInsets(uiInsets);
+function applySkin(): void {
+  const s = currentSkin(wallet);
+  view.setSkin(s.board, [s.piece.colors[0], s.piece.colors[1]]);
+}
+applySkin();
 const cutinsEl = el('cutins');
 const statusEl = el('status');
 const msgEl = el('msg');
@@ -425,6 +440,14 @@ function refresh(): void {
   btnUndo.disabled = log.length === 0;
   hashEl.hidden = !params.has('debug');
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
+  if (state.winner !== null && cpuSeat !== null && !awarded) {
+    // CPU に勝てば多く、負けても少し、Gold がもらえる
+    awarded = true;
+    const g = goldFor(cpuLevel, state.winner === seatA);
+    wallet = earn(wallet, g);
+    saveWallet(wallet);
+    say(`${g.toLocaleString('ja-JP')} G 獲得！（所持 ${wallet.gold.toLocaleString('ja-JP')} G）`);
+  }
   renderPlayerCards();
   renderHand();
   view.relayout();
@@ -603,6 +626,7 @@ async function startMatch(choice: MatchChoice, closeMenu: () => void = () => und
   log = [];
   mode = 'move';
   armedAbility = null;
+  awarded = false;
   lastTurn = state.turn;
   const first = tossFirst(seed);
   seatA = seatOfA(first);
@@ -726,7 +750,17 @@ window.addEventListener('keydown', (e) => {
 });
 
 // オープニング・メニュー・技一覧・あそびかた。?skip か ?debug が付いていれば、オープニングを飛ばす
+function renderShopUi(): void {
+  renderShop(el('shop-body'), el('shop-gold'), wallet, (next) => {
+    wallet = next;
+    saveWallet(wallet);
+    applySkin();
+    renderShopUi();
+  });
+}
+
 const shell = createShell({
+  renderShop: renderShopUi,
   skipOpening: params.has('skip') || params.has('debug'),
   onSlam: playTitleSfx,
   onStart: (choice, closeMenu) => {
