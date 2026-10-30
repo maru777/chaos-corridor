@@ -174,23 +174,29 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   inner.append(el('span', 'dback'), faceCard(id));
   reveal.appendChild(inner);
   field.appendChild(reveal);
+  // 決まったカードは、上に置いたカード（2 枚目のとき）と、下の技名の札の間に収めて、重ならないようにする
+  const parkedBottom = nth > 1 ? fr.height * 0.09 + 172 + 12 : fr.height * 0.12;
+  const slabTop = fr.height * 0.97 - 308;
+  const avail = Math.max(160, slabTop - parkedBottom);
+  const centerY = parkedBottom + avail / 2;
+  const endDy = centerY - fr.height * 0.42; // めくるカードは、画面の高さの 42% が、もとの中心
   const dx = cx - fr.width / 2;
-  const dy = cy - fr.height * 0.44;
+  const dy = cy - fr.height * 0.42;
   target.style.visibility = 'hidden';
   dart.style.visibility = 'hidden';
   root.classList.remove('build');
-  burst(fx, rarity, fr.width / 2, fr.height * 0.44);
+  burst(fx, rarity, fr.width / 2, centerY);
   root.classList.add('shake');
   field.classList.add('punch');
   if (!reduced()) {
     // 決まったカードは、画面の幅に収まる範囲で、できるだけ大きく見せる
     const base = { UNCOMMON: 2.2, RARE: 2.4, EPIC: 2.6, LEGENDARY: 2.9 }[rarity];
-    const scale = Math.min(base, (fr.width * 0.86) / 112);
+    const scale = Math.min(base, (fr.width * 0.86) / 112, avail / 152);
     reveal.animate(
       [
         { transform: `translate(${dx}px, ${dy}px) scale(1)` },
-        { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 30}px) scale(${scale * 0.8})`, offset: 0.35 },
-        { transform: `translate(0, 0) scale(${scale})` },
+        { transform: `translate(${dx * 0.3}px, ${(dy + endDy) / 2 - 30}px) scale(${scale * 0.8})`, offset: 0.35 },
+        { transform: `translate(0, ${endDy}px) scale(${scale})` },
       ],
       { duration: 520, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.2)', fill: 'forwards' },
     );
@@ -202,7 +208,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     });
   } else {
     inner.style.transform = 'rotateY(180deg)';
-    reveal.style.transform = 'scale(2)';
+    reveal.style.transform = `translate(0, ${endDy}px) scale(${Math.min(2, avail / 152)})`;
   }
   await sleep(700 * Math.max(k, 0.3));
   // 技名の札
@@ -226,7 +232,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   if (!reduced()) {
     const r = card.getBoundingClientRect();
     const mx = fr.left + fr.width / 2 - (r.left + r.width / 2);
-    const my = fr.top + fr.height * 0.44 - (r.top + r.height / 2);
+    const my = fr.top + centerY - (r.top + r.height / 2);
     card.animate([{ transform: `translate(${mx}px, ${my}px) scale(3.2)` }, { transform: 'translate(0, 0) scale(1)' }], { duration: 420, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.1)' });
   }
   reveal.classList.add('out');
