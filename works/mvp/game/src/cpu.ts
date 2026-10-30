@@ -1,6 +1,6 @@
 import { DIRS, goalRow, inBounds, isBlocked } from './board';
-import { applyAction, legalActions } from './rules';
-import type { Action, GameState, PlayerId, Pos } from './types';
+import { applyAction, legalActions, viewWalls } from './rules';
+import type { Action, GameState, PlayerId, Pos, WallSpec } from './types';
 
 /**
  * CPU。盤にも画面にも依存しない、純粋な関数。同じ状態・同じ乱数なら、同じ手を選ぶ。
@@ -91,21 +91,60 @@ export function evaluate(state: GameState, me: PlayerId): number {
   s += (state.abilities[me].length - state.abilities[foe].length) * 1.0;
   if (state.wallBlocked[foe]) s += 2;
   if (state.wallBlocked[me]) s -= 2;
+  // 休まされている回数は、1 手番ぶんの重さ（歩数の差 1 は 10 点なので、ほぼ 1 歩ぶん）
+  s += (state.skip[foe] - state.skip[me]) * 8;
+  // 攻撃技は、撃つまでが持ち札。自分の罠は、これから効く
+  s += ((state.attacks[me] !== null && !state.attackUsed[me] ? 1 : 0) - (state.attacks[foe] !== null && !state.attackUsed[foe] ? 1 : 0)) * 2;
+  s += state.traps.reduce((sum, t) => sum + (t.owner === me ? 1.5 : -1.5), 0);
+  if (state.sealed[foe]) s += 2;
+  if (state.sealed[me]) s -= 2;
   return s;
 }
 
-/** 壁は、動く側の相手の最短の道をふさぐものに絞る（読む手を減らすため）。それ以外の手は、そのまま */
+/**
+ * CPU に見えている盤。相手の罠と、相手の見えない壁は、人間と同じく見えない。
+ * （ぶつかった壁は、姿を現して見えるようになる）
+ */
+export function viewFor(state: GameState, player: PlayerId): GameState {
+  const hidden = state.walls.some((w) => w.ghost === true && w.owner !== player);
+  const traps = state.traps.filter((t) => t.owner === player);
+  if (!hidden && traps.length === state.traps.length) return state;
+  return { ...state, walls: hidden ? viewWalls(state, player) : state.walls, traps };
+}
+
+/** 罠を仕掛ける先は、相手の最短の道の、先のほうのマスに絞る（読む手を減らすため） */
+const TRAP_AHEAD = 6;
+
+/** 壁・罠・見えない壁は、動く側の相手の最短の道に関わるものに絞る（読む手を減らすため）。それ以外の手は、そのまま */
 function candidates(state: GameState): Action[] {
   const mover = state.turn;
   const foe: PlayerId = mover === 0 ? 1 : 0;
   const path = shortestPath(state, foe);
   const all = legalActions(state);
   if (path === null) return all;
-  return all.filter((a) => {
-    if (a.type !== 'wall') return true;
-    const w = { x: a.x, y: a.y, o: a.o, ...(a.half === undefined ? {} : { half: a.half }) };
+  const onPath = (w: WallSpec) => {
     for (let i = 0; i + 1 < path.length; i++) if (isBlocked([w], path[i] as Pos, path[i + 1] as Pos)) return true;
     return false;
+  };
+  const ahead = path.slice(1, 1 + TRAP_AHEAD);
+  const awayDy = -Math.sign(goalRow(state.size, foe) - state.pawns[foe].y);
+  return all.filter((a) => {
+    if (a.type === 'wall') return onPath({ x: a.x, y: a.y, o: a.o, ...(a.half === undefined ? {} : { half: a.half }) });
+    if (a.type === 'attack' && a.id === 'atkBomb') return Math.abs(a.at.x - state.pawns[foe].x) <= 2 && Math.abs(a.at.y - state.pawns[foe].y) <= 2;
+    if (a.type !== 'ability') return true;
+    switch (a.id) {
+      case 'trapGhost':
+        return onPath(a.wall);
+      case 'trapStun':
+      case 'trapBack':
+      case 'trapConfiscate':
+      case 'trapSeal':
+        return ahead.some((p) => p.x === a.at.x && p.y === a.at.y);
+      case 'trapShove':
+        return a.dx === 0 && a.dy === awayDy && ahead.some((p) => p.x === a.at.x && p.y === a.at.y);
+      default:
+        return true;
+    }
   });
 }
 
@@ -149,9 +188,25 @@ function search(state: GameState, me: PlayerId, depth: number, beam: number, alp
 }
 
 /** CPU の手。rng は 0 以上 1 未満の乱数（種つきのものを渡すと、同じ手になる） */
-export function chooseAction(state: GameState, level: number, rng: () => number, now: () => number = Date.now): Action {
+export function chooseAction(real: GameState, level: number, rng: () => number, now: () => number = Date.now): Action {
+  const action = chooseOnView(real, level, rng, now);
+  if (applyAction(real, action).ok) return action;
+  // 見えない罠・壁と重なったなど、本当の盤では反則だったとき: 本当の盤で打てる手のうち、ゴールに近づく手を選ぶ
+  const legal = legalActions(real);
+  const me = real.turn;
+  const best = legal
+    .map((a) => ({ a, r: applyAction(real, a) }))
+    .filter((x) => x.r.ok)
+    .map((x) => ({ a: x.a, score: x.r.ok ? evaluate(x.r.state, me) : -Infinity }))
+    .sort((p, q) => q.score - p.score)[0];
+  if (!best) throw new Error('打てる手がない');
+  return best.a;
+}
+
+function chooseOnView(real: GameState, level: number, rng: () => number, now: () => number): Action {
   const spec = levelSpec(level);
-  const me = state.turn;
+  const me = real.turn;
+  const state = viewFor(real, me);
   const all = legalActions(state);
   if (all.length === 0) throw new Error('打てる手がない');
   const kids = children(state, me).sort((a, b) => b.score - a.score);

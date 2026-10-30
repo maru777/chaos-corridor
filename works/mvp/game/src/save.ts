@@ -48,3 +48,23 @@ export function saveLog(list: readonly MatchEntry[]): boolean {
     return false;
   }
 }
+
+const ATTACKS_KEY = 'chaos-corridor.attacks.v1';
+
+/** 「攻撃技あり」の設定（既定は、あり） */
+export function loadAttacksOn(): boolean {
+  try {
+    return window.localStorage.getItem(ATTACKS_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function saveAttacksOn(on: boolean): boolean {
+  try {
+    window.localStorage.setItem(ATTACKS_KEY, on ? 'on' : 'off');
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -30,7 +30,7 @@ describe('技の説明（効果・手番・制約）', () => {
       const lines = parseEffect(a.text);
       const restrict = lines.find((l) => l.label === '制約')?.body ?? '';
       expect(restrict).not.toMatch(/壁・|・隕石|隕石・|相手のコマ・/);
-      if (a.id !== 'meteor' && a.id !== 'invert') expect(a.text).not.toContain('隕石');
+      if (a.id !== 'meteor' && a.id !== 'invert' && a.id !== 'thunder') expect(a.text).not.toContain('隕石');
     }
   });
 });

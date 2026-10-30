@@ -18,6 +18,9 @@
 /* ===== 上の表示: プレイヤーカード ===== */
 #top { align-items: flex-start; }
 #center { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1 1 100%; order: 0; }
+/* 操作の案内（「罠を仕掛けるマスを選ぶ」など）は、盤の上に重ねて出す。場所を取らないので、出入りしても、盤が動かない */
+#center { position: relative; }
+#msg-panel { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; width: max-content; max-width: 92vw; z-index: 6; }
 #pcard0 { order: 1; }
 #pcard1 { order: 2; }
 .pcard {

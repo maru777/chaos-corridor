@@ -4,6 +4,7 @@ import { renderCodex } from './codex';
 import { SLAM_MS, menuItems, nextPhase } from './opening';
 import { CPU_LEVELS, LEVEL_NAMES, levelStars } from '../cpu';
 import type { MatchChoice, MenuItem, OpeningEvent, OpeningPhase } from './opening';
+import { loadAttacksOn, saveAttacksOn } from '../save';
 import { playThudSfx } from '../view/sfx';
 import { RULES } from './rules';
 
@@ -50,6 +51,11 @@ export function createShell(opts: ShellOptions): Shell {
   const shop = byId('shop');
   const logModal = byId('log');
 
+  // 攻撃技の あり / なし（選んだ設定は、次回も覚えておく）
+  const attacksBox = byId('levels-attacks') as HTMLInputElement;
+  attacksBox.checked = loadAttacksOn();
+  attacksBox.addEventListener('change', () => saveAttacksOn(attacksBox.checked));
+
   // CPU の段階の選択肢
   const levelList = byId('levels-list');
   for (let l = 1; l <= CPU_LEVELS; l++) {
@@ -63,7 +69,7 @@ export function createShell(opts: ShellOptions): Shell {
     t.textContent = LEVEL_NAMES[l - 1] ?? '';
     b.append(n, t);
     b.addEventListener('click', () => {
-      begin({ vs: 'cpu', level: l });
+      begin({ vs: 'cpu', level: l, attacks: attacksBox.checked });
     });
     levelList.appendChild(b);
   }

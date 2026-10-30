@@ -6,3 +6,5 @@ export * from './rng';
 export * from './abilities';
 export * from './gacha';
 export * from './game';
+export * from './attacks';
+export * from './extras';

@@ -143,3 +143,55 @@
 .draw-top { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 .draw-name { z-index: 6; }
 .draw-parked { z-index: 7; }
+
+/* 攻撃技を選ぶ場面（コイントスと同じ、赤と黒の斜めの面） */
+#attackpick { z-index: 60; flex-direction: column; gap: 16px; padding: 16px; background: #d4001a; align-content: center; }
+#attackpick > * { position: relative; }
+#attackpick > .toss-bg { position: absolute; }
+.ap-title { animation: res-in 360ms cubic-bezier(0.2, 1.2, 0.4, 1) 80ms both; }
+.ap-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; width: 100%; max-width: 640px; }
+.ap-card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: clamp(96px, 28vw, 180px); padding: 12px 6px 14px; background: #fff; color: #05030f; border: 4px solid #05030f; border-radius: 0; box-shadow: 6px 6px 0 #05030f; transform: skewX(-8deg) rotate(-1.5deg); cursor: pointer; animation: ap-in 420ms cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.ap-card:nth-child(2) { animation-delay: 80ms; transform: skewX(-8deg) rotate(1deg); }
+.ap-card:nth-child(3) { animation-delay: 160ms; transform: skewX(-8deg) rotate(-0.5deg); }
+.ap-card[aria-pressed='true'] { background: #05030f; color: #fff; box-shadow: 8px 8px 0 #fff; translate: 0 -10px; }
+.ap-card[aria-pressed='true'] strong { color: #fff; }
+.ap-card[aria-pressed='true'] small { color: #ffb3bb; }
+.ap-plate { width: 64px; height: 64px; color: #d4001a; }
+.ap-plate svg { width: 100%; height: 100%; }
+.ap-card strong { font-size: clamp(13px, 3.6vw, 17px); font-style: italic; color: #05030f; }
+.ap-card small { font-size: 11px; letter-spacing: 0.08em; color: #666; }
+.ap-desc { min-height: 112px; width: 100%; max-width: 560px; padding: 10px 14px; background: #05030f; color: #fff; border-left: 10px solid #fff; font-size: 14px; line-height: 1.6; transform: skewX(-6deg); }
+.ap-desc:empty::before { content: 'カードをタップして、効果を見る'; opacity: 0.6; }
+.ap-ok:disabled { opacity: 0.45; }
+@keyframes ap-in { 0% { opacity: 0; translate: -60px 0; } 100% { opacity: 1; translate: 0 0; } }
+.levels-opt { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 10px; background: #fff; border: 3px solid #05030f; font-weight: 800; }
+.levels-opt input { width: 22px; height: 22px; }
+.pattack { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 4px; font-size: 12px; font-weight: 900; font-style: italic; color: #fff; background: #05030f; transform: skewX(-10deg); }
+.pattack svg { color: #ff4a5e; }
+.pattack span { transform: skewX(10deg); }
+.pattack svg { width: 22px; height: 22px; }
+.pattack.used { opacity: 0.4; text-decoration: line-through; }
+.acard.attack { background: linear-gradient(160deg, #d4001a 0%, #7a0010 100%); color: #fff; border-color: #05030f; }
+.acard.attack strong, .acard.attack small, .acard.attack .acard-left { color: #fff; }
+.acard.attack .acard-plate { color: #fff; }
+
+/* トラップ発動！（黒・赤・白の斜めの帯。ペルソナのような見せ方） */
+.trap-burst { position: fixed; inset: 0; z-index: 58; pointer-events: none; overflow: hidden; animation: tb-life 1500ms linear both; }
+.tb-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: tb-flash 1500ms ease-out both; }
+.tb-ring { position: absolute; width: 74px; height: 74px; margin: -37px 0 0 -37px; border: 6px solid #d4001a; border-radius: 50%; box-shadow: 0 0 0 3px #05030f, inset 0 0 0 3px #05030f, 0 0 24px #ff2a3f; animation: tb-ring 1500ms ease-out both; }
+.tb-stage { position: absolute; left: 50%; top: 38%; width: 150vw; height: 0; transform: translateX(-50%) rotate(-7deg); }
+.tb-red, .tb-black { position: absolute; left: 0; width: 100%; }
+.tb-red { top: -9vh; height: 20vh; background: #d4001a; clip-path: polygon(0 12%, 100% 0, 100% 88%, 0 100%); animation: tb-in-red 1500ms cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+.tb-black { top: -6vh; height: 17vh; background: #05030f; clip-path: polygon(0 0, 100% 14%, 100% 100%, 0 86%); animation: tb-in-black 1500ms cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+.tb-mark { position: absolute; left: 50%; top: -4.5vh; margin-left: -41vw; display: grid; place-items: center; width: clamp(50px, 15vw, 72px); height: clamp(50px, 15vw, 72px); font-size: clamp(28px, 8vw, 42px); font-weight: 900; color: #05030f; background: #fff; border: 4px solid #d4001a; transform: rotate(8deg); box-shadow: 5px 5px 0 #d4001a; animation: tb-pop 1500ms cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.tb-en { position: absolute; left: 50%; top: -5vh; margin-left: -24vw; padding: 1px 10px; font-size: clamp(11px, 3vw, 15px); font-weight: 900; letter-spacing: 0.3em; color: #05030f; background: #fff; transform: skewX(-14deg); animation: tb-pop 1500ms cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.tb-title { position: absolute; left: 50%; top: -3vh; margin-left: -24vw; width: 70vw; font-size: clamp(34px, 11vw, 64px); font-weight: 900; font-style: italic; letter-spacing: 0.04em; line-height: 1.1; color: #fff; text-shadow: 4px 4px 0 #d4001a; white-space: nowrap; transform-origin: 0 50%; animation: tb-slam 1500ms cubic-bezier(0.2, 1.6, 0.3, 1) both; }
+.tb-sub { position: absolute; left: 50%; top: 6.5vh; margin-left: -20vw; padding: 2px 14px; font-size: clamp(13px, 3.8vw, 18px); font-weight: 900; letter-spacing: 0.1em; color: #05030f; background: #fff; box-shadow: 4px 4px 0 #d4001a; transform: skewX(-14deg); animation: tb-pop 1500ms cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes tb-life { 0%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tb-flash { 0% { opacity: 0.9; } 14% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes tb-ring { 0% { transform: scale(2.4); opacity: 0; } 18% { transform: scale(1); opacity: 1; } 80% { transform: scale(1.15); opacity: 1; } 100% { opacity: 0; } }
+@keyframes tb-in-red { 0% { transform: translateX(-110%); } 16% { transform: translateX(0); } 82% { transform: translateX(0); } 100% { transform: translateX(110%); } }
+@keyframes tb-in-black { 0% { transform: translateX(-120%); } 22% { transform: translateX(0); } 78% { transform: translateX(0); } 100% { transform: translateX(120%); } }
+@keyframes tb-slam { 0%, 14% { transform: scale(2.6) skewX(-8deg); opacity: 0; } 28% { transform: scale(1) skewX(-8deg); opacity: 1; } 78% { transform: scale(1) skewX(-8deg); opacity: 1; } 100% { transform: scale(1) translateX(60vw) skewX(-8deg); opacity: 0; } }
+@keyframes tb-pop { 0%, 24% { transform-origin: 50% 50%; opacity: 0; } 34% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tb-flash, .tb-ring, .tb-red, .tb-black, .tb-title { animation: none; } }

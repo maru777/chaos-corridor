@@ -25,7 +25,7 @@ export function nextPhase(phase: OpeningPhase, event: OpeningEvent): OpeningPhas
 }
 
 /** 対局の相手の選び方 */
-export type MatchChoice = { readonly vs: 'local' } | { readonly vs: 'cpu'; readonly level: number }; // 'local'（1 台で二人）は、確認用。メニューには出さない
+export type MatchChoice = { readonly vs: 'local' } | { readonly vs: 'cpu'; readonly level: number; readonly attacks: boolean }; // 'local'（1 台で二人）は、確認用。メニューには出さない
 
 export interface MenuItem {
   readonly id: 'cpu' | 'shop' | 'log' | 'resume' | 'codex' | 'rules' | 'restart';

@@ -3,20 +3,27 @@ import {
   RARITIES,
   abilityDef,
   applyAction,
+  isTrapSkill,
+  attackDef,
+  dealGame,
+  emptyCells,
   legalActions,
+  legalAttacks,
   legalDiagonalMoves,
   legalLeapMoves,
   legalPawnMoves,
   newGame,
   novaSecondMoves,
   reclaimableWalls,
+  riftTargets,
+  seizeTargets,
   shortWallSpec,
   stateHash,
   voidTargets,
   wallProblem,
   WALLS_PER_PLAYER,
 } from './index';
-import type { AbilityId, Action, GameState, Orientation, PlayerId, Pos, Rarity, WallSpec } from './index';
+import type { AbilityId, Action, AttackId, GameState, Orientation, PlayerId, Pos, Rarity, Trap, TrapKind, WallSpec } from './index';
 import { LEVEL_NAMES, chooseAction, levelStars } from './cpu';
 import { createRng } from './rng';
 import { seatOfA, tossFirst } from './toss';
@@ -24,7 +31,7 @@ import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld } from './view/layout';
 import { showPop } from './view/popsfx';
-import { playMoveSfx, playSfx, playUiSfx, playTitleSfx, playWallSfx } from './view/sfx';
+import { playMoveSfx, playSfx, playTrapSfx, playUiSfx, playTitleSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 import './ui/ui.css';
 import './ui/scenes.css';
@@ -34,7 +41,7 @@ import './ui/result.css';
 import './ui/pcard.css';
 import './ui/log.css';
 import { visibleCards } from './ui/hand';
-import { abilityIconSvg } from './ui/icons';
+import { abilityIconSvg, attackIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
 import { coverScreen, revealScreen } from './ui/curtain';
@@ -45,6 +52,8 @@ import { attachTip } from './ui/tip';
 import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
 import { loadLog, loadWallet, saveLog, saveWallet } from './save';
+import { pickAttack } from './ui/attackpick';
+import { TRAP_BURST_MS, showTrapBurst } from './ui/trapburst';
 import { addEntry } from './matchlog';
 import type { MatchEntry } from './matchlog';
 import { renderLog } from './ui/log';
@@ -52,21 +61,40 @@ import { currentSkin, earn, goldFor } from './shop';
 import type { Wallet } from './shop';
 
 /** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
-type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | 'reclaim' | 'aegis' | 'void';
-type WallPickMode = 'reclaim' | 'aegis' | 'void';
+type CellTrapMode = 'trapStun' | 'trapBack' | 'trapConfiscate' | 'trapSeal' | 'trapShove';
+type WallPickMode = 'reclaim' | 'aegis' | 'void' | 'rift' | 'seize';
+/**
+ * trapShove2 は、強制移動の罠の「飛ばす向き」を選ぶ段階（罠を置くマスを選んだあと、隣のマスで向きを決める）。
+ * trapGhost は、見えない壁を置く場所を選ぶ（壁と同じ置き方）。atkLaser / atkBomb は、攻撃技の狙いを選ぶ。
+ */
+type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | WallPickMode | CellTrapMode | 'trapShove2' | 'trapGhost' | 'atkLaser' | 'atkBomb';
 
 function isWallPick(m: Mode): m is WallPickMode {
-  return m === 'reclaim' || m === 'aegis' || m === 'void';
+  return m === 'reclaim' || m === 'aegis' || m === 'void' || m === 'rift' || m === 'seize';
 }
 
-/** そのモードが使っている能力（ふつうの移動・壁のときは null） */
+function isCellTrap(m: Mode): m is CellTrapMode {
+  return m === 'trapStun' || m === 'trapBack' || m === 'trapConfiscate' || m === 'trapSeal' || m === 'trapShove';
+}
+
+/** そのモードが使っている能力（ふつうの移動・壁・攻撃技のときは null） */
 function modeAbility(m: Mode): AbilityId | null {
-  if (m === 'move' || m === 'wall') return null;
-  return m === 'nova1' || m === 'nova2' ? 'nova' : m;
+  if (m === 'move' || m === 'wall' || m === 'atkLaser' || m === 'atkBomb') return null;
+  if (m === 'nova1' || m === 'nova2') return 'nova';
+  return m === 'trapShove2' ? 'trapShove' : m;
 }
 
 /** 押したらすぐ使う（場所を選ばない）能力 */
-const INSTANT_ABILITIES: ReadonlySet<AbilityId> = new Set<AbilityId>(['jam', 'meteor', 'gravity', 'stasis', 'triwall', 'invert']);
+const INSTANT_ABILITIES: ReadonlySet<AbilityId> = new Set<AbilityId>(['jam', 'meteor', 'gravity', 'stasis', 'triwall', 'invert', 'supply', 'gate', 'thunder']);
+
+/** 罠が起きたときに知らせる言葉 */
+const TRAP_TEXT: Readonly<Record<TrapKind, string>> = {
+  stun: '罠だ！ 1 回休み',
+  back: '罠だ！ 元のマスに戻された',
+  shove: '罠だ！ 飛ばされた',
+  confiscate: '罠だ！ 壁を 1 枚失った',
+  seal: '罠だ！ 次の手番、Skill と攻撃技が使えない',
+};
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -84,8 +112,14 @@ const params = new URLSearchParams(location.search);
 // URL に ?seed=数字 を付けると、その種で始まる（同じ手札を再現できる。確認や不具合の再現用）
 const seedParam = Number(params.get('seed'));
 let seed = Number.isInteger(seedParam) && seedParam > 0 ? seedParam : newSeed();
-let state: GameState = newGame(seed);
+/** それぞれが選んだ攻撃技（攻撃技なしのときは、どちらも null） */
+let chosenAttacks: [AttackId | null, AttackId | null] = [null, null];
+let state: GameState = newGame(seed, chosenAttacks);
 let log: Action[] = [];
+/** 罠の強制移動で、罠を置くマスに選んだところ */
+let trapCell: Pos | null = null;
+/** 手札で選んでいる（次のタップで撃つ）攻撃技 */
+let armedAttack = false;
 let mode: Mode = 'move';
 let orient: Orientation = 'h';
 let ghost: WallSpec | null = null;
@@ -98,6 +132,8 @@ let lastTurn: PlayerId = 0;
 /** 対戦の形（CPU か、二人で）と、CPU の強さ。参加者 A（あなた / プレイヤー1）の席。CPU が座っている席（CPU 戦でなければ null） */
 let vs: 'cpu' | 'local' = 'local';
 let cpuLevel = 5;
+/** 攻撃技あり（CPU 戦の設定。「同じ相手で、やりなおす」でも引き継ぐ） */
+let attacksOn = false;
 let seatA: PlayerId = 0;
 let cpuSeat: PlayerId | null = null;
 /** コイントスの最中は、操作を受け付けない */
@@ -212,19 +248,22 @@ function nearestWallOf(candidates: readonly WallSpec[], bx: number, by: number):
 
 /** 壁を選ぶモード（回収・鉄壁・虚無）で、選べる壁 */
 function pickCandidates(m: WallPickMode): readonly WallSpec[] {
-  return m === 'void' ? voidTargets(state) : reclaimableWalls(state);
+  if (m === 'void') return voidTargets(state);
+  if (m === 'rift') return riftTargets(state);
+  if (m === 'seize') return seizeTargets(state);
+  return reclaimableWalls(state);
 }
 
 function updatePreview(clientX: number, clientY: number): void {
-  if (state.winner !== null || (mode !== 'wall' && !isWallPick(mode))) {
+  if (state.winner !== null || (mode !== 'wall' && mode !== 'trapGhost' && !isWallPick(mode))) {
     ghost = null;
     view.setGhost(null, false);
     return;
   }
   const p = view.pick(clientX, clientY);
   if (p === null) return;
-  if (mode === 'wall') {
-    if (shortMode && state.shortWalls[state.turn] > 0) {
+  if (mode === 'wall' || mode === 'trapGhost') {
+    if (mode === 'wall' && shortMode && state.shortWalls[state.turn] > 0) {
       const s = nearestShortSlot(state.size, p.bx, p.by, orient);
       ghost = shortWallSpec(orient, s.line, s.c, state.size);
     } else {
@@ -266,6 +305,56 @@ function div(className: string, text?: string): HTMLDivElement {
   return d;
 }
 
+/** 手札の中の、攻撃技のカード（公開）。Skill と同じく、タップで選び、もう一度タップで撃つ */
+function attackCard(id: AttackId, seat: PlayerId): HTMLButtonElement {
+  const def = attackDef(id);
+  const used = state.attackUsed[seat];
+  const b = document.createElement('button');
+  b.className = 'acard legendary attack';
+  b.setAttribute('aria-pressed', String(armedAttack || mode === 'atkLaser' || mode === 'atkBomb'));
+  b.setAttribute('aria-label', `攻撃技 ${def.name}。${def.text}`);
+  const rar = document.createElement('span');
+  rar.className = 'acard-rar';
+  rar.textContent = 'ATTACK';
+  const plate = document.createElement('span');
+  plate.className = 'acard-plate';
+  plate.innerHTML = attackIconSvg(id); // アイコンは、コードで作った SVG（外部の入力ではない）
+  const name = document.createElement('strong');
+  name.textContent = def.name;
+  const reading = document.createElement('small');
+  reading.textContent = def.reading;
+  const leftTag = document.createElement('span');
+  leftTag.className = 'acard-left';
+  leftTag.textContent = used ? '残り 0/1' : '残り 1/1';
+  b.append(rar, plate, name, reading, leftTag);
+  if (used) {
+    b.disabled = true;
+    b.classList.add('spent');
+  } else if (state.turn === seat && legalAttacks(state).length === 0) b.disabled = true;
+  const showDesc = () => fillEffect(handDescEl, def.text, armedAttack ? '→ もう一度タップで撃つ' : undefined);
+  b.addEventListener('pointerdown', showDesc);
+  b.addEventListener('mouseenter', showDesc);
+  b.addEventListener('focus', showDesc);
+  const hideDesc = () => {
+    handDescEl.textContent = '';
+  };
+  b.addEventListener('mouseleave', hideDesc);
+  b.addEventListener('blur', hideDesc);
+  b.addEventListener('click', () => {
+    if (locked()) return;
+    if (armedAttack) {
+      armedAttack = false;
+      useAttack(id);
+      return;
+    }
+    armedAbility = null;
+    armedAttack = true;
+    renderHand();
+    fillEffect(handDescEl, def.text, '→ もう一度タップで撃つ');
+  });
+  return b;
+}
+
 /** 手札。手番の人の手札は、いつも見える。相手の手札は、枚数だけ（上のプレイヤーカード） */
 function renderHand(): void {
   abilitiesEl.replaceChildren();
@@ -296,6 +385,8 @@ function renderHand(): void {
   const usable = new Set<AbilityId>();
   if (state.turn === seat) for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
   else for (const id of left) usable.add(id);
+  const mineAttack = state.attacks[seat];
+  if (mineAttack !== null) abilitiesEl.appendChild(attackCard(mineAttack, seat));
   for (const [i, id] of cards.entries()) {
     const def = abilityDef(id);
     const b = document.createElement('button');
@@ -343,6 +434,7 @@ function renderHand(): void {
         useAbility(id);
         return;
       }
+      armedAttack = false;
       armedAbility = id;
       renderHand();
       fillEffect(handDescEl, def.text, '→ もう一度タップで使う');
@@ -391,6 +483,10 @@ function renderPlayerCards(): void {
       if (at >= 0) {
         rest.splice(at, 1);
         cards.appendChild(debugShowAll ? miniCard(id) : div('mini-back'));
+      } else if (isTrapSkill(id) && state.winner === null && cpuSeat !== null && p === cpuSeat && !debugShowAll) {
+        // 相手が使った罠系の Skill は、表向きにしない（罠を使ったことが、分からないように）
+        const back = div('mini-back used');
+        cards.appendChild(back);
       } else {
         const used = miniCard(id);
         used.classList.add('used');
@@ -402,6 +498,20 @@ function renderPlayerCards(): void {
     remain.textContent = `${state.abilities[p].length}/${dealt.length}`;
     skills.append(div('pchip', 'SKILL'), cards, remain);
     card.appendChild(skills);
+
+    // ATTACK: 攻撃技は、お互いに公開（撃ったあとは、灰色）
+    const atk = state.attacks[p];
+    if (atk !== null) {
+      const row = div('prow');
+      const chip = div(`pattack${state.attackUsed[p] ? ' used' : ''}`);
+      chip.innerHTML = attackIconSvg(atk); // アイコンは、コードで作った SVG（外部の入力ではない）
+      const name = document.createElement('span');
+      name.textContent = attackDef(atk).name;
+      chip.appendChild(name);
+      chip.title = attackDef(atk).text;
+      row.append(div('pchip', 'ATTACK'), chip);
+      card.appendChild(row);
+    }
   }
 }
 
@@ -445,13 +555,34 @@ function useAbility(id: AbilityId): void {
     say('');
   } else {
     mode = id === 'nova' ? 'nova1' : (id as Mode);
-    say(isWallPick(mode) ? '対象の壁を選ぶ' : '行き先のマスを選ぶ'); // 効果の説明は、カードの上に出ているので、ここでは繰り返さない
+    trapCell = null;
+    // 効果の説明は、カードの上に出ているので、ここでは繰り返さない
+    say(isWallPick(mode) ? '対象の壁を選ぶ' : isCellTrap(mode) ? '罠を仕掛けるマスを選ぶ' : mode === 'trapGhost' ? '見えない壁を置く場所を選ぶ' : '行き先のマスを選ぶ');
     if (isWallPick(mode) && pickCandidates(mode).length === 0) {
       mode = 'move';
-      say(id === 'void' ? '消せる壁がない' : id === 'aegis' ? '鉄壁にできる自分の壁がない' : '戻せる自分の壁がない');
+      say(
+        id === 'void' ? '消せる壁がない' : id === 'aegis' ? '鉄壁にできる自分の壁がない' : id === 'rift' ? '回せる壁がない' : id === 'seize' ? '奪える相手の壁がない' : '戻せる自分の壁がない',
+      );
     }
   }
   refresh();
+}
+
+/** 攻撃技を撃つ。狙いを選ぶもの（レーザー・爆撃）は、狙うマスを選ぶ。ほかは、すぐ撃つ */
+function useAttack(id: AttackId): void {
+  if (locked()) return;
+  if (id === 'atkLaser' || id === 'atkBomb') {
+    if (mode === id) {
+      mode = 'move';
+      say('');
+    } else {
+      mode = id;
+      say(id === 'atkLaser' ? '撃つ列のマスを選ぶ（「向き」ボタンで、横一列 / 縦一列）' : '爆撃の中心のマスを選ぶ');
+    }
+    refresh();
+    return;
+  }
+  play({ type: 'attack', id });
 }
 
 function refresh(): void {
@@ -459,10 +590,13 @@ function refresh(): void {
   if (state.turn !== lastTurn) {
     lastTurn = state.turn;
     armedAbility = null;
+    armedAttack = false;
   }
   ghost = null;
   view.setGhost(null, false);
-  if (state.winner !== null || (mode === 'wall' && state.wallBlocked[state.turn])) mode = mode === 'wall' ? 'move' : mode;
+  if (state.winner !== null || ((mode === 'wall' || mode === 'trapGhost') && state.wallBlocked[state.turn])) mode = mode === 'wall' || mode === 'trapGhost' ? 'move' : mode;
+  if ((mode === 'atkLaser' || mode === 'atkBomb') && legalAttacks(state).length === 0) mode = 'move';
+  if (mode !== 'trapShove2') trapCell = null;
   const needed = modeAbility(mode);
   if (needed !== null && !hasAbility(needed)) mode = 'move';
   if (mode !== 'nova2') novaFirst = null;
@@ -473,7 +607,14 @@ function refresh(): void {
     else if (mode === 'diagonal') markers = legalDiagonalMoves(state);
     else if (mode === 'leap') markers = legalLeapMoves(state);
     else if (mode === 'nova2' && novaFirst !== null) markers = [novaFirst, ...novaSecondMoves(state, novaFirst)];
+    else if (mode === 'trapShove2' && trapCell !== null) {
+      const at = trapCell;
+      markers = [{ x: at.x, y: at.y - 1 }, { x: at.x, y: at.y + 1 }, { x: at.x - 1, y: at.y }, { x: at.x + 1, y: at.y }].filter(
+        (p) => p.x >= 0 && p.y >= 0 && p.x < state.size && p.y < state.size,
+      );
+    }
   }
+  view.setViewer(cpuSeat !== null ? seatA : null);
   view.setState(state, markers);
   if (state.winner !== null) {
     statusEl.textContent = `${NAMES[state.winner]}の勝ち`;
@@ -485,7 +626,7 @@ function refresh(): void {
   btnMove.setAttribute('aria-pressed', String(mode === 'move'));
   btnWall.setAttribute('aria-pressed', String(mode === 'wall'));
   btnWall.disabled = state.winner === null && state.wallBlocked[state.turn];
-  btnRotate.textContent = `壁の向き: ${orient === 'h' ? '横' : '縦'}`;
+  btnRotate.textContent = mode === 'atkLaser' ? `レーザーの向き: ${orient === 'h' ? '横一列' : '縦一列'}` : `壁の向き: ${orient === 'h' ? '横' : '縦'}`;
   // 短い壁を持っているときだけ、壁の長さを切り替えるボタンを出す
   btnLength.hidden = !(state.winner === null && state.shortWalls[state.turn] > 0);
   btnLength.textContent = `壁の長さ: ${shortMode ? '短（1マス）' : '長（2マス）'}`;
@@ -527,6 +668,20 @@ function play(action: Action): void {
   say('');
   if (mode !== 'move' && mode !== 'wall') mode = 'move';
   novaFirst = null;
+  if (action.type === 'attack') {
+    state = r.state;
+    log = [...log, action];
+    const def = attackDef(action.id);
+    runEffect(def.name, def.reading, rarityOverride ?? 'LEGENDARY', mover, refresh, def.shout);
+    return;
+  }
+  if (action.type === 'ability' && isTrapSkill(action.id)) {
+    // 罠系の Skill は、演出なし・手番を使わない（使ったことが、相手に知られないように）。続けて、もう一度動ける
+    state = r.state;
+    log = [...log, action];
+    refresh();
+    return;
+  }
   if (action.type === 'ability') {
     // 状態は確定済み。盤の見た目は、カットインの見せ場で切り替える
     if (keepAbilities) {
@@ -537,13 +692,56 @@ function play(action: Action): void {
       log = [...log, action];
     }
     const def = abilityDef(action.id);
-    runEffect(def.name, def.reading, rarityOverride ?? def.rarity, mover, refresh, def.shout);
+    const show = () =>
+      runEffect(
+        def.name,
+        def.reading,
+        rarityOverride ?? def.rarity,
+        mover,
+        () => {
+          refresh();
+          notifyTrap(before, state, mover, false);
+        },
+        def.shout,
+      );
+    // Skill で罠のマスに着いたときは、先に「トラップ発動！」、そのあとに Skill の演出
+    const stepped = steppedTrap(before, state);
+    if (stepped) {
+      busy = true;
+      trapBurst(stepped);
+      window.setTimeout(show, TRAP_BURST_MS * 0.75);
+    } else show();
     return;
   }
   state = r.state;
   log = [...log, action];
   refresh();
   popFor(action, mover);
+  notifyTrap(before, state, mover);
+}
+
+/** この手で踏まれた罠（なければ undefined） */
+function steppedTrap(before: GameState, after: GameState): Trap | undefined {
+  return before.traps.find((t) => !after.traps.some((u) => u.x === t.x && u.y === t.y));
+}
+
+/** 「トラップ発動！」の演出。罠のあったマスの上に出す（相手の罠も、踏んだ瞬間に姿を見せる） */
+function trapBurst(t: Trap): void {
+  const w = cellToWorld(state.size, t.x, t.y);
+  const p = view.project(w.x, w.z);
+  playTrapSfx();
+  showTrapBurst(el('pops'), p.x, p.y, t.kind, TRAP_TEXT[t.kind].replace('罠だ！ ', ''));
+}
+
+/** 罠を踏んだ・見えない壁にぶつかった・相手が休みになったことを、言葉で知らせる */
+function notifyTrap(before: GameState, after: GameState, mover: PlayerId, withBurst = true): void {
+  const stepped = steppedTrap(before, after);
+  if (stepped) {
+    say(TRAP_TEXT[stepped.kind]);
+    if (withBurst) trapBurst(stepped);
+  }
+  else if (after.pawns[mover].x === before.pawns[mover].x && after.pawns[mover].y === before.pawns[mover].y && after.turn !== mover) say('見えない壁にぶつかった！');
+  else if (after.winner === null && after.turn === mover && before.turn === mover) say('相手は休み。続けて動ける');
 }
 
 const PLAYER_COLOR = ['#ffc928', '#ff4fb8'] as const;
@@ -567,7 +765,7 @@ function popFor(action: Action, mover: PlayerId): void {
 }
 
 function replay(forSeed: number, actions: readonly Action[]): GameState {
-  let s = newGame(forSeed);
+  let s = newGame(forSeed, chosenAttacks);
   for (const a of actions) {
     const r = applyAction(s, a);
     if (!r.ok) throw new Error(`再生で反則: ${r.reason}`);
@@ -613,6 +811,37 @@ function chooseNovaSecond(cell: Pos): void {
   play({ type: 'ability', id: 'nova', first, second: cell });
 }
 
+/** 強制移動の罠: 罠を置くマスを選んだら、次に、飛ばす向き（隣のマス）を選ぶ */
+function chooseTrapCell(cell: Pos): void {
+  if (!emptyCells(state).some((c) => c.x === cell.x && c.y === cell.y)) {
+    say('そのマスには、罠を置けない');
+    return;
+  }
+  trapCell = cell;
+  mode = 'trapShove2';
+  say('飛ばす向きを選ぶ（光っている隣のマス。罠のマスをもう一度押すと、選び直す）');
+  refresh();
+}
+
+function chooseTrapDirection(cell: Pos): void {
+  const at = trapCell;
+  if (at === null) return;
+  if (cell.x === at.x && cell.y === at.y) {
+    trapCell = null;
+    mode = 'trapShove';
+    say('罠を仕掛けるマスを選ぶ');
+    refresh();
+    return;
+  }
+  const dx = cell.x - at.x;
+  const dy = cell.y - at.y;
+  if (Math.abs(dx) + Math.abs(dy) !== 1) {
+    say('隣のマスで、向きを選ぶ');
+    return;
+  }
+  play({ type: 'ability', id: 'trapShove', at, dx, dy });
+}
+
 const stage = el('stage');
 let keyAtDown = '';
 
@@ -628,7 +857,7 @@ stage.addEventListener('pointerdown', (e) => {
 
 stage.addEventListener('pointerup', (e) => {
   if (locked() || state.winner !== null) return;
-  if (mode === 'move' || mode === 'diagonal' || mode === 'leap' || mode === 'nova1' || mode === 'nova2') {
+  if (mode === 'move' || mode === 'diagonal' || mode === 'leap' || mode === 'nova1' || mode === 'nova2' || isCellTrap(mode) || mode === 'trapShove2' || mode === 'atkLaser' || mode === 'atkBomb') {
     const p = view.pick(e.clientX, e.clientY);
     if (p === null) return;
     const cell = nearestCell(state.size, p.bx, p.by);
@@ -636,15 +865,21 @@ stage.addEventListener('pointerup', (e) => {
     if (mode === 'move') play({ type: 'move', to: cell });
     else if (mode === 'nova1') chooseNovaFirst(cell);
     else if (mode === 'nova2') chooseNovaSecond(cell);
+    else if (mode === 'atkLaser') play({ type: 'attack', id: 'atkLaser', axis: orient === 'h' ? 'row' : 'col', index: orient === 'h' ? cell.y : cell.x });
+    else if (mode === 'atkBomb') play({ type: 'attack', id: 'atkBomb', at: cell });
+    else if (mode === 'trapShove') chooseTrapCell(cell);
+    else if (mode === 'trapShove2') chooseTrapDirection(cell);
+    else if (isCellTrap(mode)) play({ type: 'ability', id: mode, at: cell });
     else play({ type: 'ability', id: mode, to: cell });
     return;
   }
   // 壁・回収・鉄壁・虚無: マウスは予告が出ているのでそのまま確定。タッチは 1 回目で予告、同じ場所をもう一度押すと確定
   if (ghost !== null && ghostKey(ghost) === keyAtDown) {
     if (mode === 'wall') play(ghost.half === undefined ? { type: 'wall', x: ghost.x, y: ghost.y, o: ghost.o } : { type: 'wall', x: ghost.x, y: ghost.y, o: ghost.o, half: ghost.half });
+    else if (mode === 'trapGhost') play({ type: 'ability', id: 'trapGhost', wall: ghost });
     else if (isWallPick(mode)) play({ type: 'ability', id: mode, wall: ghost });
   } else if (ghost !== null) {
-    const problem = mode === 'wall' ? wallProblem(state, ghost) : null;
+    const problem = mode === 'wall' || mode === 'trapGhost' ? wallProblem(state, ghost) : null;
     say(problem === null ? 'もう一度押すと決まる' : `置けない: ${problem}`);
   }
 });
@@ -680,12 +915,16 @@ btnUndo.addEventListener('click', () => {
  */
 async function startMatch(choice: MatchChoice, closeMenu: () => void = () => undefined, animate = true): Promise<void> {
   vs = choice.vs;
-  if (choice.vs === 'cpu') cpuLevel = choice.level;
+  if (choice.vs === 'cpu') {
+    cpuLevel = choice.level;
+    attacksOn = choice.attacks;
+  }
   tossing = true;
   if (animate) await coverScreen();
   closeMenu();
   seed = newSeed();
-  state = newGame(seed);
+  chosenAttacks = [null, null];
+  state = newGame(seed, chosenAttacks);
   log = [];
   mode = 'move';
   armedAbility = null;
@@ -714,13 +953,31 @@ async function startMatch(choice: MatchChoice, closeMenu: () => void = () => und
       hideDraw();
     }
   }
+  // 攻撃技あり: 配られた 3 つから 1 つ選ぶ（CPU は、乱数で選ぶ）。選んだら、対局の状態に入れる
+  if (choice.vs === 'cpu' && choice.attacks) {
+    const offers = dealGame(seed).offers;
+    const cpuSide: PlayerId = seatA === 0 ? 1 : 0;
+    const crng = createRng((seed + 12345) >>> 0);
+    const cpuPick = offers[cpuSide][Math.floor(crng() * offers[cpuSide].length)] ?? null;
+    let mine: AttackId | null = offers[seatA][0] ?? null;
+    if (animate) {
+      // 画面は暗転したまま（Skill を引く場面のあと）。選ぶ場面を出して、選んだら、また暗転する
+      const picked = await pickAttack(offers[seatA], revealScreen);
+      mine = picked.id;
+      await coverScreen();
+      picked.hide();
+    }
+    chosenAttacks = seatA === 0 ? [mine, cpuPick] : [cpuPick, mine];
+    state = newGame(seed, chosenAttacks);
+    lastTurn = state.turn;
+  }
   tossing = false;
   refresh();
   if (animate) await revealScreen();
 }
 
 function resetGame(closeMenu: () => void = () => undefined): void {
-  void startMatch(vs === 'cpu' ? { vs, level: cpuLevel } : { vs }, closeMenu);
+  void startMatch(vs === 'cpu' ? { vs, level: cpuLevel, attacks: attacksOn } : { vs }, closeMenu);
 }
 btnReset.addEventListener('click', () => {
   if (locked()) return;

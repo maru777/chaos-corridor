@@ -26,6 +26,8 @@ export interface Wall extends WallSpec {
   readonly owner: PlayerId;
   /** 鉄壁（能力）で守られた壁。虚無で消されず、回収でも戻せない */
   readonly iron?: boolean;
+  /** 見えない壁（罠の Skill）。置いた人以外には見えず、ぶつかる（動けると思って動こうとする）と姿を現す */
+  readonly ghost?: boolean;
 }
 
 export type AbilityId =
@@ -41,7 +43,43 @@ export type AbilityId =
   | 'stasis'
   | 'triwall'
   | 'chaos'
-  | 'invert';
+  | 'invert'
+  | 'trapStun'
+  | 'trapBack'
+  | 'trapShove'
+  | 'trapGhost'
+  | 'trapConfiscate'
+  | 'trapSeal'
+  | 'supply'
+  | 'rift'
+  | 'gate'
+  | 'seize'
+  | 'thunder';
+
+/** 攻撃技。1 人に 1 つ、公開の状態で持ち、1 局に 1 回、手番を使って撃つ */
+export type AttackId =
+  | 'atkMeteor'
+  | 'atkLaser'
+  | 'atkShock'
+  | 'atkFreeze'
+  | 'atkBomb'
+  | 'atkSwarm'
+  | 'atkPlunder'
+  | 'atkSwap'
+  | 'atkGale'
+  | 'atkMines';
+
+/** 罠の種類。踏んだ人（罠の持ち主でない側）に起きること */
+export type TrapKind = 'stun' | 'back' | 'shove' | 'confiscate' | 'seal';
+
+/** 盤に仕掛けた罠。持ち主以外には見えない。持ち主のコマは踏んでも何も起きない */
+export interface Trap extends Pos {
+  readonly owner: PlayerId;
+  readonly kind: TrapKind;
+  /** shove（強制移動）の向き。踏んだコマが、この向きへ最大 2 マス飛ばされる */
+  readonly dx?: number;
+  readonly dy?: number;
+}
 
 /** 隕石が落ちて、通れなくなったマス。victim（落とされた相手）が turnsLeft 回動くと消える */
 export interface Meteor extends Pos {
@@ -64,6 +102,20 @@ export interface GameState {
   readonly wallBlocked: readonly [boolean, boolean];
   /** 隕石で通れなくなっているマス（どちらのコマも通れない） */
   readonly meteors: readonly Meteor[];
+  /** 仕掛けられた罠（持ち主以外には見えない） */
+  readonly traps: readonly Trap[];
+  /** それぞれの攻撃技（公開）。なし（攻撃技なしの設定）のときは null */
+  readonly attacks: readonly [AttackId | null, AttackId | null];
+  /** 攻撃技を撃ったか */
+  readonly attackUsed: readonly [boolean, boolean];
+  /** 休まされている回数。手番が来るたびに 1 減り、その手番は飛ばされる */
+  readonly skip: readonly [number, number];
+  /** true の人は、次の手番で Skill も攻撃技も使えない（封印の罠）。その手番が終わると解ける */
+  readonly sealed: readonly [boolean, boolean];
+  /** これまでの手数。乱数（メテオなど）の種に混ぜる */
+  readonly ply: number;
+  /** 対局の乱数の種。ランダムな攻撃の結果は、この種と手数だけで決まる */
+  readonly rngSeed: number;
 }
 
 export type AbilityAction =
@@ -81,12 +133,24 @@ export type AbilityAction =
   | { readonly type: 'ability'; readonly id: 'triwall' }
   /** 盤上の壁を、種（seed）で決まる乱数で、すべて置き直す。同じ種なら、同じ結果 */
   | { readonly type: 'ability'; readonly id: 'chaos'; readonly seed: number }
-  | { readonly type: 'ability'; readonly id: 'invert' };
+  | { readonly type: 'ability'; readonly id: 'invert' }
+  | { readonly type: 'ability'; readonly id: 'trapStun' | 'trapBack' | 'trapConfiscate' | 'trapSeal'; readonly at: Pos }
+  | { readonly type: 'ability'; readonly id: 'trapShove'; readonly at: Pos; readonly dx: number; readonly dy: number }
+  | { readonly type: 'ability'; readonly id: 'trapGhost'; readonly wall: WallSpec }
+  | { readonly type: 'ability'; readonly id: 'supply' | 'gate' | 'thunder' }
+  | { readonly type: 'ability'; readonly id: 'rift' | 'seize'; readonly wall: WallSpec };
+
+export type AttackAction =
+  | { readonly type: 'attack'; readonly id: 'atkMeteor' | 'atkShock' | 'atkFreeze' | 'atkSwarm' | 'atkPlunder' | 'atkSwap' | 'atkGale' | 'atkMines' }
+  /** 横一列（row の y 行）か縦一列（col の x 列）に撃つ */
+  | { readonly type: 'attack'; readonly id: 'atkLaser'; readonly axis: 'row' | 'col'; readonly index: number }
+  | { readonly type: 'attack'; readonly id: 'atkBomb'; readonly at: Pos };
 
 export type Action =
   | { readonly type: 'move'; readonly to: Pos }
   | { readonly type: 'wall'; readonly x: number; readonly y: number; readonly o: Orientation; readonly half?: 0 | 1 }
-  | AbilityAction;
+  | AbilityAction
+  | AttackAction;
 
 export type ApplyResult =
   | { readonly ok: true; readonly state: GameState }

@@ -50,6 +50,27 @@ export const ABILITIES: readonly AbilityDef[] = [
     rarity: 'UNCOMMON',
     text: '効果：相手が次の番に、壁を置けなくする（動くことだけできる）。\n手番：使う。\n制約：相手が、すでに壁を封じられていないこと。',
   },
+  {
+    id: 'supply',
+    name: '静寂の補給',
+    reading: 'Silent Supply',
+    rarity: 'UNCOMMON',
+    text: '効果：手元の壁が 1 枚増える。\n手番：使う。\n制約：いつでも使える。',
+  },
+  {
+    id: 'trapBack',
+    name: '逆行の罠',
+    reading: 'Reverse Snare',
+    rarity: 'UNCOMMON',
+    text: '効果：空きマスに罠を仕掛ける。相手のコマが踏むと、動く前のマスに戻される（その手番は無駄になる）。\n手番：使わない（仕掛けたあとも、続けて動ける。仕掛けたことは、相手に知られない）。\n制約：コマ・障害物・ほかの罠がないマスであること。罠は相手には見えない。自分のコマは踏んでも何も起きない。',
+  },
+  {
+    id: 'trapConfiscate',
+    name: '強奪の罠',
+    reading: 'Plunder Snare',
+    rarity: 'UNCOMMON',
+    text: '効果：空きマスに罠を仕掛ける。相手のコマが踏むと、相手の手元の壁が 1 枚なくなる。\n手番：使わない（仕掛けたあとも、続けて動ける。仕掛けたことは、相手に知られない）。\n制約：コマ・障害物・ほかの罠がないマスであること。罠は相手には見えない。自分のコマは踏んでも何も起きない。',
+  },
   // ---- RARE ----
   {
     id: 'leap',
@@ -71,6 +92,34 @@ export const ABILITIES: readonly AbilityDef[] = [
     reading: 'Eternal Aegis',
     rarity: 'RARE',
     text: '効果：盤上の自分の壁 1 枚を鉄壁にする。虚無で消されず、回収でも戻せなくなる。\n手番：使う。\n制約：鉄壁でない自分の壁があること。',
+  },
+  {
+    id: 'trapStun',
+    name: '氷牢の罠',
+    reading: 'Frost Snare',
+    rarity: 'RARE',
+    text: '効果：空きマスに罠を仕掛ける。相手のコマが踏むと、相手は次の 1 手番を休む。\n手番：使わない（仕掛けたあとも、続けて動ける。仕掛けたことは、相手に知られない）。\n制約：コマ・障害物・ほかの罠がないマスであること。罠は相手には見えない。自分のコマは踏んでも何も起きない。',
+  },
+  {
+    id: 'trapShove',
+    name: '疾風の罠',
+    reading: 'Gale Snare',
+    rarity: 'RARE',
+    text: '効果：空きマスに罠を仕掛け、向きを決める。相手のコマが踏むと、その向きへ最大 2 マス飛ばされる（壁・コマ・障害物の手前で止まる）。\n手番：使わない（仕掛けたあとも、続けて動ける。仕掛けたことは、相手に知られない）。\n制約：コマ・障害物・ほかの罠がないマスであること。罠は相手には見えない。自分のコマは踏んでも何も起きない。',
+  },
+  {
+    id: 'trapSeal',
+    name: '封印の罠',
+    reading: 'Seal Snare',
+    rarity: 'RARE',
+    text: '効果：空きマスに罠を仕掛ける。相手のコマが踏むと、相手は次の手番、Skill と攻撃技が使えなくなる。\n手番：使わない（仕掛けたあとも、続けて動ける。仕掛けたことは、相手に知られない）。\n制約：コマ・障害物・ほかの罠がないマスであること。罠は相手には見えない。自分のコマは踏んでも何も起きない。',
+  },
+  {
+    id: 'rift',
+    name: '大地の亀裂',
+    reading: 'Earth Rift',
+    rarity: 'RARE',
+    text: '効果：盤上の壁を 1 枚、縦と横の向きを入れ替える（相手の壁も、自分の壁も）。\n手番：使う。\n制約：鉄壁でない、ふつうの長さの壁があること。回したあとも、重ならず、どちらにもゴールへの道が残ること。',
   },
   // ---- EPIC ----
   {
@@ -108,6 +157,20 @@ export const ABILITIES: readonly AbilityDef[] = [
     rarity: 'EPIC',
     text: '効果：1 マス分の短い壁を、3 枚置けるようになる。壁を置くときに、短い壁を選べる。\n手番：使う（この手番には、壁は置かない）。\n制約：いつでも使える。',
   },
+  {
+    id: 'trapGhost',
+    name: '虚像の壁',
+    reading: 'Phantom Wall',
+    rarity: 'EPIC',
+    text: '効果：手元の壁を 1 枚使って、見えない壁として置く。相手には見えず、相手が通ろうとしてぶつかると姿を現す（ぶつかった手番は無駄になる）。\n手番：使わない（置いたあとも、続けて動ける。置いたことは、相手に知られない）。\n制約：ふつうの壁と同じ置き方ができる場所であること（重ならず、どちらにもゴールへの道が残ること）。',
+  },
+  {
+    id: 'gate',
+    name: '転位の門',
+    reading: 'Shift Gate',
+    rarity: 'EPIC',
+    text: '効果：自分のコマが、同じ行の、左右反対側のマスへ跳ぶ。\n手番：使う。\n制約：中央の列にいないこと。跳ぶ先に、相手のコマや障害物がなく、そこからゴールへの道が残ること。',
+  },
   // ---- LEGENDARY ----
   {
     id: 'chaos',
@@ -123,7 +186,28 @@ export const ABILITIES: readonly AbilityDef[] = [
     rarity: 'LEGENDARY',
     text: '効果：盤を 180 度回す。壁と隕石は反転し、コマは位置を入れ替える。\n手番：使う。\n制約：いつでも使える。',
   },
+  {
+    id: 'seize',
+    name: '奪取の手',
+    reading: 'Stealing Hand',
+    rarity: 'LEGENDARY',
+    text: '効果：盤上の相手の壁を 1 枚、自分の壁にする（回収や虚無で、自分の手元に戻るようになる）。\n手番：使う。\n制約：鉄壁でない、相手の壁が見えていること。',
+  },
+  {
+    id: 'thunder',
+    name: '天空の雷霆',
+    reading: 'Sky Thunder',
+    rarity: 'LEGENDARY',
+    text: '効果：相手のコマの周り 3×3 の範囲にある、壁・隕石・罠を、すべて壊す（壊した壁は持ち主の手元に戻る）。\n手番：使う。\n制約：その範囲に、壊せる物が 1 つ以上あること。鉄壁は壊れない。',
+  },
 ];
+
+/** 罠系の Skill（手番を使わず、演出もなく、使ったことが相手に知られない） */
+export const TRAP_SKILLS: ReadonlySet<AbilityId> = new Set<AbilityId>(['trapStun', 'trapBack', 'trapShove', 'trapGhost', 'trapConfiscate', 'trapSeal']);
+
+export function isTrapSkill(id: AbilityId): boolean {
+  return TRAP_SKILLS.has(id);
+}
 
 export function abilityDef(id: AbilityId): AbilityDef {
   const def = ABILITIES.find((a) => a.id === id);

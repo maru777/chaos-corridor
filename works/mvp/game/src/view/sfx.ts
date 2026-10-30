@@ -359,3 +359,18 @@ function thunderHit(c: AudioContext, out: AudioNode, start: number, vol: number)
   tone(c, out, 'sine', 110, 28, start, 0.7, 1.0 * vol);
   whoosh(c, out, 900, 120, start, 0.7, 0.8 * vol);
 }
+
+/** トラップ発動の効果音: 「ビーッ」と警報のような音が落ち、ガシャンと罠が閉じる */
+export function playTrapSfx(): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.34;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.003;
+  tone(c, master, 'sawtooth', 880, 440, t, 0.18, 0.8);
+  tone(c, master, 'sawtooth', 880, 440, t + 0.2, 0.18, 0.8);
+  tone(c, master, 'square', 140, 50, t + 0.4, 0.3, 1);
+  whoosh(c, master, 4200, 300, t + 0.4, 0.22, 0.7);
+  tone(c, master, 'triangle', 1500, 700, t + 0.4, 0.12, 0.6);
+}

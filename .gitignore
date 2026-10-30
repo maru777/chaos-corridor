@@ -5,6 +5,7 @@ dist/
 
 # 実験・一時ファイル
 works/*/scratch/
+works/*/*/scratch/
 
 # この PC 固有（説明用の README だけ追跡する）
 /tools/*

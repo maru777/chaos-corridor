@@ -374,15 +374,17 @@ describe('隕石（メテオ）', () => {
 });
 
 describe('能力の一覧', () => {
-  it('13 個。レア度は UNCOMMON 3・RARE 3・EPIC 5・LEGENDARY 2', () => {
-    expect(ABILITIES).toHaveLength(13);
+  it('24 個。レア度は UNCOMMON 6・RARE 7・EPIC 7・LEGENDARY 4', () => {
+    expect(ABILITIES).toHaveLength(24);
     const by = (r: string) => ABILITIES.filter((a) => a.rarity === r).length;
-    expect([by('UNCOMMON'), by('RARE'), by('EPIC'), by('LEGENDARY')]).toEqual([3, 3, 5, 2]);
+    expect([by('UNCOMMON'), by('RARE'), by('EPIC'), by('LEGENDARY')]).toEqual([6, 7, 7, 4]);
   });
 
   it('どの能力も、手札に入れれば、使える場面がある（使える行動が 1 つ以上）', () => {
     for (const a of ABILITIES) {
-      const s = withAbilities([a.id], [], { walls: [W(3, 3, 'h', 0), W(5, 5, 'v', 1)], pawns: [{ x: 4, y: 6 }, { x: 4, y: 2 }] });
+      // 転位の門は、中央の列にいると使えない
+      const mine = a.id === 'gate' ? { x: 3, y: 6 } : { x: 4, y: 6 };
+      const s = withAbilities([a.id], [], { walls: [W(3, 3, 'h', 0), W(5, 5, 'v', 1)], pawns: [mine, { x: 4, y: 2 }] });
       expect(legalActions(s).some((x) => x.type === 'ability' && x.id === a.id)).toBe(true);
     }
   });

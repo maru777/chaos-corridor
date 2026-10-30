@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { goalRow } from '../board';
-import type { GameState, Pos, WallSpec } from '../types';
+import type { GameState, PlayerId, Pos, Trap, TrapKind, WallSpec } from '../types';
 import type { Rarity } from '../abilities';
 import { CINEMA_SHADER, OUTLINE_COLOR, glowMaterial, makeGlowTexture, makeToonGradient, outlineMesh } from './fx';
 import { IMPACT_TAIL_MS, impactFrame } from './impact';
@@ -28,7 +28,18 @@ const WALL_COLOR = 0xffb04a;
 /** 鉄壁（鋼の色）と、短い壁（水色）。置く前の予告（緑・赤）と区別するため、本物の壁の色を覚えておく */
 const IRON_COLOR = 0xaab6cc;
 const SHORT_COLOR = 0x5fe0ff;
+/** 見えない壁（罠の Skill）。置いた本人にだけ見える、すきとおった紫 */
+const GHOST_WALL_COLOR = 0xb07bff;
 const REAL_WALL_COLORS = new Set<number>([WALL_COLOR, IRON_COLOR, SHORT_COLOR]);
+
+/** 罠の目印の文字と色（自分が仕掛けた罠は、自分にだけ見える） */
+const TRAP_LOOK: Readonly<Record<TrapKind, { char: string; color: string }>> = {
+  stun: { char: '休', color: '#7fd8ff' },
+  back: { char: '戻', color: '#ffd23f' },
+  shove: { char: '飛', color: '#7dffb0' },
+  confiscate: { char: '奪', color: '#ff8a4a' },
+  seal: { char: '封', color: '#c79bff' },
+};
 const SHORT_LENGTH = 0.92;
 
 /** 色（0xRRGGBB）の明るさを、k 倍にする */
@@ -61,6 +72,10 @@ export class BoardView {
   private readonly wallGroup = new THREE.Group();
   private readonly markerGroup = new THREE.Group();
   private readonly meteorGroup = new THREE.Group();
+  private readonly trapGroup = new THREE.Group();
+  private readonly trapTextures = new Map<string, THREE.Texture>();
+  /** 罠・見えない壁を見せる相手（その人の物だけ描く）。null なら、手番の人 */
+  private viewer: PlayerId | null = null;
   private readonly digitTextures = new Map<number, THREE.Texture>();
   private readonly pawns: THREE.Group[] = [];
   /** 見た目の差し替え（ショップで買ったもの）: 盤のマスの色、縁の光、コマの色 */
@@ -104,7 +119,7 @@ export class BoardView {
     this.scene.add(key);
 
     this.buildBoard();
-    this.scene.add(this.wallGroup, this.markerGroup, this.meteorGroup);
+    this.scene.add(this.wallGroup, this.markerGroup, this.meteorGroup, this.trapGroup);
 
     // 光る物（壁・コマ・目印）がにじむ
     this.composer = new EffectComposer(this.renderer);
@@ -319,6 +334,55 @@ export class BoardView {
     return g;
   }
 
+  /** 罠の目印: 床に、色つきの札と漢字 1 文字（強制移動は、飛ばす向きの矢印も） */
+  private makeTrap(t: Trap): THREE.Group {
+    const look = TRAP_LOOK[t.kind];
+    const arrow = t.kind === 'shove' ? `${t.dx === 1 ? '→' : t.dx === -1 ? '←' : t.dy === 1 ? '↓' : '↑'}` : '';
+    const key = `${t.kind}${arrow}`;
+    let tex = this.trapTextures.get(key);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d');
+      if (g) {
+        g.fillStyle = look.color;
+        g.strokeStyle = '#05030f';
+        g.lineWidth = 10;
+        g.beginPath();
+        g.moveTo(64, 8);
+        g.lineTo(120, 64);
+        g.lineTo(64, 120);
+        g.lineTo(8, 64);
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.fillStyle = '#05030f';
+        g.font = '900 56px sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(look.char, 64, arrow === '' ? 66 : 54);
+        if (arrow !== '') {
+          g.font = '900 34px sans-serif';
+          g.fillText(arrow, 64, 94);
+        }
+      }
+      tex = new THREE.CanvasTexture(c);
+      this.trapTextures.set(key, tex);
+    }
+    const g = new THREE.Group();
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }));
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.y = 0.03;
+    plate.renderOrder = 5;
+    g.add(plate);
+    return g;
+  }
+
+  /** 罠・見えない壁を見せる相手。CPU 戦では、人間の席。null なら、手番の人（二人で遊ぶとき） */
+  setViewer(viewer: PlayerId | null): void {
+    this.viewer = viewer;
+  }
+
   private placeWall(obj: THREE.Object3D, wall: WallSpec): void {
     const w = wallToWorld(this.size, wall.x, wall.y);
     // 短い壁は、交点の中心から、ふさぐ 1 マスの中心へ、半マスずらす
@@ -329,9 +393,13 @@ export class BoardView {
   /** 状態を描き直す。legalMoves は、動けるマスの目印 */
   setState(state: GameState, legalMoves: readonly Pos[]): void {
     this.wallGroup.clear();
+    // 勝負がついたら、隠れていた罠・壁も、すべて見せる
+    const seeAll = state.winner !== null;
+    const viewer = this.viewer ?? state.turn;
     for (const wall of state.walls) {
+      if (wall.ghost === true && wall.owner !== viewer && !seeAll) continue;
       const short = wall.half !== undefined;
-      const obj = this.makeWall(wall.o, wall.iron ? IRON_COLOR : short ? SHORT_COLOR : WALL_COLOR, short);
+      const obj = this.makeWall(wall.o, wall.ghost === true ? GHOST_WALL_COLOR : wall.iron ? IRON_COLOR : short ? SHORT_COLOR : WALL_COLOR, short);
       this.placeWall(obj, wall);
       this.wallGroup.add(obj);
     }
@@ -348,6 +416,14 @@ export class BoardView {
       const meteor = this.makeMeteor(m.turnsLeft);
       meteor.position.set(w.x, 0.36, w.z);
       this.meteorGroup.add(ground, meteor);
+    }
+    this.trapGroup.clear();
+    for (const t of state.traps) {
+      if (t.owner !== viewer && !seeAll) continue;
+      const w = cellToWorld(this.size, t.x, t.y);
+      const obj = this.makeTrap(t);
+      obj.position.set(w.x, 0, w.z);
+      this.trapGroup.add(obj);
     }
     this.markerGroup.clear();
     const color = this.pawnColors[state.turn] as number;

@@ -1,6 +1,7 @@
 import { DIRS, bothHavePath, goalRow, hasPathToGoal, inBounds, isBlocked, wallSegments } from './board';
+import { FREEZE_TURNS, MINES_COUNT, PLUNDER_COUNT, PUSH_STEPS, SWARM_COUNT, TRAP_KINDS, attackRng, cellsAround, emptyCells, hitsInCells, laserHits, removeHits, samePos, wallTouchesCell } from './extras';
 import { createRng } from './rng';
-import type { AbilityId, Action, ApplyResult, GameState, Meteor, Orientation, PlayerId, Pos, Wall, WallSpec } from './types';
+import type { AbilityId, Action, ApplyResult, AttackAction, AttackId, GameState, Meteor, Orientation, PlayerId, Pos, Trap, TrapKind, Wall, WallSpec } from './types';
 
 export const BOARD_SIZE = 9;
 export const WALLS_PER_PLAYER = 10;
@@ -13,6 +14,8 @@ export function initialState(
   size: number = BOARD_SIZE,
   wallsPerPlayer: number = WALLS_PER_PLAYER,
   abilities: readonly [readonly AbilityId[], readonly AbilityId[]] = [[], []],
+  attacks: readonly [AttackId | null, AttackId | null] = [null, null],
+  rngSeed = 0,
 ): GameState {
   const mid = Math.floor(size / 2);
   return {
@@ -29,11 +32,14 @@ export function initialState(
     abilities,
     wallBlocked: [false, false],
     meteors: [],
+    traps: [],
+    attacks,
+    attackUsed: [false, false],
+    skip: [0, 0],
+    sealed: [false, false],
+    ply: 0,
+    rngSeed,
   };
-}
-
-function samePos(a: Pos, b: Pos): boolean {
-  return a.x === b.x && a.y === b.y;
 }
 
 function otherPlayer(p: PlayerId): PlayerId {
@@ -49,27 +55,35 @@ export function isMeteorAt(state: Pick<GameState, 'meteors'>, p: Pos): boolean {
   return state.meteors.some((m) => samePos(m, p));
 }
 
-/** 手番のコマが動ける先（ジャンプ・斜め越えを含む。隕石のマスには入れない） */
-export function legalPawnMoves(state: GameState): Pos[] {
+/**
+ * その人に見えている壁。相手の見えない壁（罠の Skill）は、ぶつかって姿を現すまで、見えない。
+ * 動ける先の判定（画面の光るマス、CPU の読み）は、この壁で行う。
+ */
+export function viewWalls(state: Pick<GameState, 'walls'>, viewer: PlayerId): readonly Wall[] {
+  return state.walls.some((w) => w.ghost === true && w.owner !== viewer) ? state.walls.filter((w) => !(w.ghost === true && w.owner !== viewer)) : state.walls;
+}
+
+/** 手番のコマが動ける先（ジャンプ・斜め越えを含む。隕石のマスには入れない）。walls は、判定に使う壁（ふつうは手番の人に見えている壁） */
+export function legalPawnMoves(state: GameState, walls: readonly WallSpec[] = viewWalls(state, state.turn)): Pos[] {
   const me = state.pawns[state.turn];
   const foe = state.pawns[otherPlayer(state.turn)];
   const out: Pos[] = [];
   for (const d of DIRS) {
     const n = { x: me.x + d.x, y: me.y + d.y };
-    if (!inBounds(state.size, n) || isBlocked(state.walls, me, n) || isMeteorAt(state, n)) continue;
+    if (!inBounds(state.size, n) || isBlocked(walls, me, n) || isMeteorAt(state, n)) continue;
     if (!samePos(n, foe)) {
       out.push(n);
       continue;
     }
     const jump = { x: n.x + d.x, y: n.y + d.y };
-    if (inBounds(state.size, jump) && !isBlocked(state.walls, n, jump) && !isMeteorAt(state, jump)) {
+    if (inBounds(state.size, jump) && !isBlocked(walls, n, jump) && !isMeteorAt(state, jump)) {
       out.push(jump);
       continue;
     }
     for (const side of DIRS) {
       if (side.x * d.x + side.y * d.y !== 0) continue;
       const diag = { x: n.x + side.x, y: n.y + side.y };
-      if (inBounds(state.size, diag) && !isBlocked(state.walls, n, diag) && !isMeteorAt(state, diag)) out.push(diag);
+      if (inBounds(state.size, diag) && !isBlocked(walls, n, diag) && !isMeteorAt(state, diag)) out.push(diag);
     }
   }
   return out;
@@ -79,7 +93,7 @@ export function legalPawnMoves(state: GameState): Pos[] {
  * 斜行（能力）で動ける先。斜めのマスに、壁にふさがれていない道（横→縦、または縦→横）が 1 つでもあればよい。
  * 途中のマスに相手のコマがいる道や、隕石のマスを通る道は通れない。
  */
-export function legalDiagonalMoves(state: GameState): Pos[] {
+export function legalDiagonalMoves(state: GameState, walls: readonly WallSpec[] = viewWalls(state, state.turn)): Pos[] {
   const me = state.pawns[state.turn];
   const foe = state.pawns[otherPlayer(state.turn)];
   const out: Pos[] = [];
@@ -89,8 +103,8 @@ export function legalDiagonalMoves(state: GameState): Pos[] {
       if (!inBounds(state.size, to) || samePos(to, foe) || isMeteorAt(state, to)) continue;
       const viaX = { x: me.x + dx, y: me.y };
       const viaY = { x: me.x, y: me.y + dy };
-      const routeX = !samePos(viaX, foe) && !isMeteorAt(state, viaX) && !isBlocked(state.walls, me, viaX) && !isBlocked(state.walls, viaX, to);
-      const routeY = !samePos(viaY, foe) && !isMeteorAt(state, viaY) && !isBlocked(state.walls, me, viaY) && !isBlocked(state.walls, viaY, to);
+      const routeX = !samePos(viaX, foe) && !isMeteorAt(state, viaX) && !isBlocked(walls, me, viaX) && !isBlocked(walls, viaX, to);
+      const routeY = !samePos(viaY, foe) && !isMeteorAt(state, viaY) && !isBlocked(walls, me, viaY) && !isBlocked(walls, viaY, to);
       if (routeX || routeY) out.push(to);
     }
   }
@@ -118,11 +132,11 @@ export function legalLeapMoves(state: GameState): Pos[] {
  * 超新星（能力）の 2 回目に動ける先。1 回目で動いたあとの位置から、ふつうに動ける先。
  * 1 回目でゴール行に着いたら勝負がつくので、2 回目はない（空）。
  */
-export function novaSecondMoves(state: GameState, first: Pos): Pos[] {
+export function novaSecondMoves(state: GameState, first: Pos, walls: readonly WallSpec[] = viewWalls(state, state.turn)): Pos[] {
   if (first.y === goalRow(state.size, state.turn)) return [];
   const pawns: [Pos, Pos] = [state.pawns[0], state.pawns[1]];
   pawns[state.turn] = first;
-  return legalPawnMoves({ ...state, pawns });
+  return legalPawnMoves({ ...state, pawns }, walls);
 }
 
 /** 隕石（能力）が落ちる場所: 相手のコマの、ゴールへ向かう側のすぐ前のマス。なければ null（相手がゴール行にいるとき） */
@@ -228,7 +242,8 @@ export function reclaimableWalls(state: GameState): Wall[] {
 
 /** 虚無（能力）で消せる壁: 鉄壁でない、すべての壁（相手の壁も自分の壁も） */
 export function voidTargets(state: GameState): Wall[] {
-  return state.walls.filter((w) => !w.iron);
+  const seen = viewWalls(state, state.turn);
+  return state.walls.filter((w) => !w.iron && seen.includes(w));
 }
 
 // ---- 天地反転（盤を 180 度回す）----
@@ -254,12 +269,13 @@ function rotateWall(size: number, w: Wall): Wall {
  * 盤全体（壁・隕石）を 180 度回す。コマは、位置を入れ替える（先手のコマは、後手のコマが回った先に、その逆も）。
  * 回したあとも、どちらのコマも、ゴールへの道が残る（盤とコマを同時に回す形なので、必ず残る）。
  */
-export function invertedBoard(state: GameState): Pick<GameState, 'pawns' | 'walls' | 'meteors'> {
+export function invertedBoard(state: GameState): Pick<GameState, 'pawns' | 'walls' | 'meteors' | 'traps'> {
   const s = state.size;
   return {
     pawns: [rotatePos(s, state.pawns[1]), rotatePos(s, state.pawns[0])],
     walls: state.walls.map((w) => rotateWall(s, w)),
     meteors: state.meteors.map((m) => ({ ...m, ...rotatePos(s, m) })),
+    traps: state.traps.map((t) => ({ ...t, ...rotatePos(s, t), ...(t.dx === undefined || t.dy === undefined ? {} : { dx: -t.dx, dy: -t.dy }) })),
   };
 }
 
@@ -312,6 +328,217 @@ export function chaosResult(state: GameState, seed: number): Pick<GameState, 'wa
   return { walls: placed, wallsLeft, shortWalls };
 }
 
+// ---- 罠・攻撃技・追加 Skill ----
+
+/** 罠を置ける空きマスか（コマ・隕石・罠がないマス） */
+export function trapProblem(state: GameState, at: Pos): string | null {
+  if (!inBounds(state.size, at)) return '盤の外';
+  if (state.pawns.some((p) => samePos(p, at))) return 'コマがいるマスには置けない';
+  if (isMeteorAt(state, at)) return '隕石があるマスには置けない';
+  if (state.traps.some((t) => samePos(t, at))) return 'すでに罠がある';
+  return null;
+}
+
+/**
+ * コマを、向き (dx, dy) へ最大 steps マス押す。壁・盤の端・もう一方のコマ・隕石の手前で止まる。
+ * 押された先の位置を返す（動けなければ、元の位置）。
+ */
+export function pushPawn(state: GameState, who: PlayerId, dx: number, dy: number, steps: number = PUSH_STEPS): Pos {
+  let cur = state.pawns[who];
+  const other = state.pawns[otherPlayer(who)];
+  for (let i = 0; i < steps; i++) {
+    const next = { x: cur.x + dx, y: cur.y + dy };
+    if (!inBounds(state.size, next) || isBlocked(state.walls, cur, next) || samePos(next, other) || isMeteorAt(state, next)) break;
+    cur = next;
+  }
+  return cur;
+}
+
+/** 烈風（攻撃技）で相手が押される向き: ゴールと反対 */
+function galeDir(state: GameState): Pos | null {
+  const foe = otherPlayer(state.turn);
+  const dy = Math.sign(goalRow(state.size, foe) - state.pawns[foe].y);
+  return dy === 0 ? null : { x: 0, y: -dy };
+}
+
+/** 転位の門（Skill）で跳ぶ先: 同じ行の、左右反対側。行けない理由があれば null */
+export function gateTarget(state: GameState): Pos | null {
+  const me = state.pawns[state.turn];
+  const to = { x: state.size - 1 - me.x, y: me.y };
+  if (to.x === me.x) return null;
+  if (samePos(to, state.pawns[otherPlayer(state.turn)]) || isMeteorAt(state, to)) return null;
+  if (!hasPathToGoal(state.size, state.walls, to, goalRow(state.size, state.turn), state.meteors)) return null;
+  return to;
+}
+
+/** 大地の亀裂（Skill）で壁を回したあとの形（長い壁だけ）。回せなければ null */
+export function riftResult(state: GameState, target: Wall): WallSpec | null {
+  if (target.half !== undefined) return null;
+  const turned: WallSpec = { x: target.x, y: target.y, o: target.o === 'h' ? 'v' : 'h' };
+  const rest = state.walls.filter((w) => w !== target);
+  return wallFits(state, rest, turned) === null ? turned : null;
+}
+
+/** 大地の亀裂・奪取の手で選べる壁: 見えている、鉄壁でない壁（亀裂は長い壁だけ、奪取は相手の壁だけ） */
+export function riftTargets(state: GameState): Wall[] {
+  return voidTargets(state).filter((w) => riftResult(state, w) !== null);
+}
+
+export function seizeTargets(state: GameState): Wall[] {
+  return voidTargets(state).filter((w) => w.owner !== state.turn);
+}
+
+function wallRef(w: Wall): WallSpec {
+  return { x: w.x, y: w.y, o: w.o, ...(w.half === undefined ? {} : { half: w.half }) };
+}
+
+/** 隕石を落とせるマス（コマがいるか、隕石・道の面で問題のないマス）。メテオ・隕石群が選ぶ候補 */
+function strikeCells(state: GameState, extra: readonly Pos[], withPawns: boolean): Pos[] {
+  const out: Pos[] = [];
+  for (let y = 0; y < state.size; y++) {
+    for (let x = 0; x < state.size; x++) {
+      const c = { x, y };
+      const pawn = state.pawns.some((p) => samePos(p, c));
+      if (pawn) {
+        if (withPawns) out.push(c);
+        continue;
+      }
+      if (isMeteorAt(state, c) || extra.some((e) => samePos(e, c))) continue;
+      if (bothHavePath(state, state.walls, [...extra, c])) out.push(c);
+    }
+  }
+  return out;
+}
+
+/** 攻撃技を撃てない理由。撃てるなら null */
+export function attackProblem(state: GameState, action: AttackAction): string | null {
+  return attackOutcome(state, action).error ?? null;
+}
+
+type AttackPatch = Partial<
+  Pick<GameState, 'walls' | 'meteors' | 'traps' | 'wallsLeft' | 'shortWalls' | 'pawns' | 'skip'>
+>;
+
+/** 攻撃技の結果（盤の変化）。state の手番の人が撃つ。反則なら error */
+export function attackOutcome(state: GameState, action: AttackAction): { error?: string; patch?: AttackPatch } {
+  const me = state.turn;
+  const foe = otherPlayer(me);
+  if (state.attacks[me] !== action.id) return { error: 'その攻撃技を持っていない' };
+  if (state.attackUsed[me]) return { error: 'その攻撃技は使い終わっている' };
+  if (state.sealed[me]) return { error: '封印されていて、使えない' };
+  const skip: [number, number] = [state.skip[0], state.skip[1]];
+  switch (action.id) {
+    case 'atkMeteor': {
+      const rng = attackRng(state);
+      const cells = strikeCells(state, [], true);
+      const c = cells[Math.floor(rng() * cells.length)];
+      if (!c) return { error: '落とす場所がない' };
+      const removed = removeHits(state, hitsInCells(state, [c]).filter((h) => h.kind !== 'meteor'));
+      const who = state.pawns.findIndex((p) => samePos(p, c));
+      if (who >= 0) skip[who] = (skip[who] ?? 0) + 1;
+      const meteors = who >= 0 ? removed.meteors : [...removed.meteors, { x: c.x, y: c.y, victim: foe, turnsLeft: METEOR_TURNS }];
+      return { patch: { ...removed, meteors, skip } };
+    }
+    case 'atkLaser': {
+      if (action.index < 0 || action.index >= state.size) return { error: '盤の外' };
+      const hits = laserHits(state, me, action.axis, action.index);
+      if (hits.length === 0) return { error: 'その列に壊せる物がない' };
+      return { patch: removeHits(state, hits) };
+    }
+    case 'atkShock': {
+      const hits = hitsInCells(state, cellsAround(state.size, state.pawns[me]));
+      if (hits.length === 0) return { error: '周りに壊せる物がない' };
+      return { patch: removeHits(state, hits) };
+    }
+    case 'atkFreeze':
+      skip[foe] += FREEZE_TURNS;
+      return { patch: { skip } };
+    case 'atkBomb': {
+      if (!inBounds(state.size, action.at)) return { error: '盤の外' };
+      const hits = hitsInCells(state, cellsAround(state.size, action.at));
+      if (hits.length === 0) return { error: 'その範囲に壊せる物がない' };
+      return { patch: removeHits(state, hits) };
+    }
+    case 'atkSwarm': {
+      const rng = attackRng(state);
+      const placed: Pos[] = [];
+      for (let i = 0; i < SWARM_COUNT; i++) {
+        const cells = strikeCells(state, placed, false);
+        const c = cells[Math.floor(rng() * cells.length)];
+        if (!c) break;
+        placed.push(c);
+      }
+      if (placed.length === 0) return { error: '落とす場所がない' };
+      const removed = removeHits(state, placed.flatMap((c) => hitsInCells(state, [c]).filter((h) => h.kind === 'trap')));
+      return { patch: { ...removed, meteors: [...removed.meteors, ...placed.map((c): Meteor => ({ x: c.x, y: c.y, victim: foe, turnsLeft: METEOR_TURNS }))] } };
+    }
+    case 'atkPlunder': {
+      const n = Math.min(PLUNDER_COUNT, state.wallsLeft[foe]);
+      if (n <= 0) return { error: '相手の手元に壁がない' };
+      const wallsLeft: [number, number] = [state.wallsLeft[0], state.wallsLeft[1]];
+      wallsLeft[foe] -= n;
+      wallsLeft[me] += n;
+      return { patch: { wallsLeft } };
+    }
+    case 'atkSwap': {
+      const pawns: [Pos, Pos] = [state.pawns[1], state.pawns[0]];
+      if (pawns[0].y === goalRow(state.size, 0) || pawns[1].y === goalRow(state.size, 1)) return { error: 'ゴール行に着いてしまうので、入れ替えられない' };
+      if (!bothHavePath({ ...state, pawns }, state.walls)) return { error: 'ゴールへの道がなくなる' };
+      return { patch: { pawns } };
+    }
+    case 'atkGale': {
+      const dir = galeDir(state);
+      if (dir === null) return { error: '相手がゴール行にいる' };
+      const to = pushPawn(state, foe, dir.x, dir.y);
+      if (samePos(to, state.pawns[foe])) return { error: '相手を動かせない' };
+      const pawns: [Pos, Pos] = [state.pawns[0], state.pawns[1]];
+      pawns[foe] = to;
+      return { patch: { pawns } };
+    }
+    case 'atkMines': {
+      const rng = attackRng(state);
+      const cells = emptyCells(state);
+      const traps: Trap[] = [...state.traps];
+      for (let i = 0; i < MINES_COUNT && cells.length > 0; i++) {
+        const c = cells.splice(Math.floor(rng() * cells.length), 1)[0] as Pos;
+        const kind = TRAP_KINDS[Math.floor(rng() * TRAP_KINDS.length)] as TrapKind;
+        if (kind === 'shove') {
+          const d = DIRS[Math.floor(rng() * DIRS.length)] as Pos;
+          traps.push({ x: c.x, y: c.y, owner: me, kind, dx: d.x, dy: d.y });
+        } else traps.push({ x: c.x, y: c.y, owner: me, kind });
+      }
+      if (traps.length === state.traps.length) return { error: '置く場所がない' };
+      return { patch: { traps } };
+    }
+  }
+}
+
+export function legalAttacks(state: GameState): AttackAction[] {
+  const me = state.turn;
+  const id = state.attacks[me];
+  if (id === null || state.attackUsed[me] || state.sealed[me]) return [];
+  const out: AttackAction[] = [];
+  const add = (a: AttackAction) => {
+    if (attackOutcome(state, a).error === undefined) out.push(a);
+  };
+  switch (id) {
+    case 'atkLaser':
+      for (const axis of ['row', 'col'] as const) for (let index = 0; index < state.size; index++) add({ type: 'attack', id, axis, index });
+      break;
+    case 'atkBomb':
+      for (let y = 0; y < state.size; y++) for (let x = 0; x < state.size; x++) add({ type: 'attack', id, at: { x, y } });
+      break;
+    default:
+      add({ type: 'attack', id });
+  }
+  return out;
+}
+
+/** 手番の人が、いま撃てる攻撃技があるか */
+export function canAttack(state: GameState): boolean {
+  return legalAttacks(state).length > 0;
+}
+
 export function legalActions(state: GameState): Action[] {
   if (state.winner !== null) return [];
   const out: Action[] = [
@@ -319,7 +546,9 @@ export function legalActions(state: GameState): Action[] {
     ...legalWalls(state).map(
       (w): Action => (w.half === undefined ? { type: 'wall', x: w.x, y: w.y, o: w.o } : { type: 'wall', x: w.x, y: w.y, o: w.o, half: w.half }),
     ),
+    ...legalAttacks(state),
   ];
+  if (state.sealed[state.turn]) return out;
   for (const id of state.abilities[state.turn]) {
     switch (id) {
       case 'diagonal':
@@ -336,10 +565,16 @@ export function legalActions(state: GameState): Action[] {
         break;
       case 'reclaim':
       case 'aegis':
-        for (const w of reclaimableWalls(state)) out.push({ type: 'ability', id, wall: { x: w.x, y: w.y, o: w.o, ...(w.half === undefined ? {} : { half: w.half }) } });
+        for (const w of reclaimableWalls(state)) out.push({ type: 'ability', id, wall: wallRef(w) });
         break;
       case 'void':
-        for (const w of voidTargets(state)) out.push({ type: 'ability', id, wall: { x: w.x, y: w.y, o: w.o, ...(w.half === undefined ? {} : { half: w.half }) } });
+        for (const w of voidTargets(state)) out.push({ type: 'ability', id, wall: wallRef(w) });
+        break;
+      case 'rift':
+        for (const w of riftTargets(state)) out.push({ type: 'ability', id, wall: wallRef(w) });
+        break;
+      case 'seize':
+        for (const w of seizeTargets(state)) out.push({ type: 'ability', id, wall: wallRef(w) });
         break;
       case 'meteor':
         if (meteorProblem(state) === null) out.push({ type: 'ability', id });
@@ -353,14 +588,38 @@ export function legalActions(state: GameState): Action[] {
       case 'chaos':
         if (chaosMovableWalls(state).length > 0) for (const seed of [1, 2, 3]) out.push({ type: 'ability', id, seed });
         break;
+      case 'gate':
+        if (gateTarget(state) !== null) out.push({ type: 'ability', id });
+        break;
+      case 'thunder':
+        if (thunderHits(state).length > 0) out.push({ type: 'ability', id });
+        break;
+      case 'trapStun':
+      case 'trapBack':
+      case 'trapConfiscate':
+      case 'trapSeal':
+        for (const at of emptyCells(state)) out.push({ type: 'ability', id, at });
+        break;
+      case 'trapShove':
+        for (const at of emptyCells(state)) for (const d of DIRS) out.push({ type: 'ability', id, at, dx: d.x, dy: d.y });
+        break;
+      case 'trapGhost':
+        for (const w of legalWalls(state)) if (w.half === undefined) out.push({ type: 'ability', id, wall: w });
+        break;
       case 'stasis':
       case 'triwall':
       case 'invert':
+      case 'supply':
         out.push({ type: 'ability', id });
         break;
     }
   }
   return out;
+}
+
+/** 天空の雷霆（Skill）が壊す物: 相手のコマの周り 3×3 */
+export function thunderHits(state: GameState) {
+  return hitsInCells(state, cellsAround(state.size, state.pawns[otherPlayer(state.turn)]));
 }
 
 /** 落とされた相手（mover）が 1 回動いたので、その人の隕石の残りを 1 減らし、0 になったものを消す */
@@ -374,32 +633,105 @@ function giveBack(wall: Wall, wallsLeft: [number, number], shortWalls: [number, 
   else shortWalls[wall.owner] += 1;
 }
 
+/** ぶつかった（見えない壁に動きをさえぎられた）とき、姿を現す壁: 動こうとした人とその隣のマスの辺をふさぐ、相手の見えない壁 */
+function revealedGhosts(state: GameState, mover: PlayerId): readonly Wall[] {
+  const foeGhosts = state.walls.filter((w) => w.ghost === true && w.owner !== mover);
+  const spots = [state.pawns[mover], state.pawns[otherPlayer(mover)]];
+  const near = foeGhosts.filter((g) => spots.some((s) => wallTouchesCell(g, s)));
+  const reveal = new Set<Wall>(near.length > 0 ? near : foeGhosts);
+  return state.walls.map((w) => (reveal.has(w) ? { ...w, ghost: false } : w));
+}
+
 /**
  * 元の状態は変えず、新しい状態を返す。反則なら理由を返す。
- * 能力を使うと、その手番を使う（1 手番に 1 つの行動）。1 つの能力は 1 局に 1 回。
- * 手番が終わると、その人にかかっていた電波妨害は解け、その人にかかっていた隕石の残りが 1 減る。
+ * 能力・攻撃技を使うと、その手番を使う（1 手番に 1 つの行動）。1 つの能力は 1 局に 1 回。
+ * 手番が終わると、その人にかかっていた電波妨害・封印は解け、その人にかかっていた隕石の残りが 1 減る。
+ * 休まされている人の手番は、飛ばされる。
  */
 export function applyAction(state: GameState, action: Action): ApplyResult {
+  const r = applyCore(state, action);
+  if (!r.ok) return r;
+  return { ok: true, state: settle(r.state, state) };
+}
+
+/** 手数を進め、休まされている人の手番を飛ばす */
+function settle(next: GameState, prev: GameState): GameState {
+  const skip: [number, number] = [next.skip[0], next.skip[1]];
+  const wallBlocked: [boolean, boolean] = [next.wallBlocked[0], next.wallBlocked[1]];
+  const sealed: [boolean, boolean] = [next.sealed[0], next.sealed[1]];
+  let meteors = next.meteors;
+  let turn = next.turn;
+  while (next.winner === null && skip[turn] > 0) {
+    skip[turn] -= 1;
+    wallBlocked[turn] = false;
+    sealed[turn] = false;
+    meteors = tickMeteors(meteors, turn);
+    turn = otherPlayer(turn);
+  }
+  return { ...next, skip, wallBlocked, sealed, meteors, turn, ply: prev.ply + 1 };
+}
+
+function applyCore(state: GameState, action: Action): ApplyResult {
   if (state.winner !== null) return { ok: false, reason: '勝負はついている' };
   const me = state.turn;
   const foe = otherPlayer(me);
 
   const wallBlocked: [boolean, boolean] = [state.wallBlocked[0], state.wallBlocked[1]];
   wallBlocked[me] = false;
+  const sealed: [boolean, boolean] = [state.sealed[0], state.sealed[1]];
+  const wasSealed = sealed[me];
+  sealed[me] = false;
   const meteors = tickMeteors(state.meteors, me);
+  const base = { wallBlocked, sealed, meteors };
 
-  const moveTo = (to: Pos, abilities: GameState['abilities']): ApplyResult => {
+  /** 手番を相手に渡して終える。変わったところだけ patch で渡す */
+  const done = (patch: Partial<GameState>): ApplyResult => ({ ok: true, state: { ...state, ...base, turn: foe, ...patch } });
+
+  /** 動いた先に、相手の罠があれば踏む */
+  const moveTo = (to: Pos, abilities: GameState['abilities'], from: Pos = state.pawns[me]): ApplyResult => {
     const pawns: [Pos, Pos] = [state.pawns[0], state.pawns[1]];
     pawns[me] = { x: to.x, y: to.y };
-    const won = to.y === goalRow(state.size, me);
-    return {
-      ok: true,
-      state: { ...state, pawns, abilities, wallBlocked, meteors, turn: won ? me : foe, winner: won ? me : null },
-    };
+    const patch: { -readonly [K in keyof GameState]?: GameState[K] } = { pawns, abilities };
+    const goal = goalRow(state.size, me);
+    let won = to.y === goal;
+    const trap = won ? undefined : state.traps.find((t) => samePos(t, to) && t.owner !== me);
+    if (trap) {
+      patch.traps = state.traps.filter((t) => t !== trap);
+      switch (trap.kind) {
+        case 'stun': {
+          const skip: [number, number] = [state.skip[0], state.skip[1]];
+          skip[me] += 1;
+          patch.skip = skip;
+          break;
+        }
+        case 'back':
+          pawns[me] = from;
+          break;
+        case 'shove': {
+          pawns[me] = pushPawn({ ...state, pawns, meteors }, me, trap.dx ?? 0, trap.dy ?? 0);
+          won = pawns[me].y === goal;
+          break;
+        }
+        case 'confiscate': {
+          const wallsLeft: [number, number] = [state.wallsLeft[0], state.wallsLeft[1]];
+          wallsLeft[me] = Math.max(0, wallsLeft[me] - 1);
+          patch.wallsLeft = wallsLeft;
+          break;
+        }
+        case 'seal':
+          sealed[me] = true;
+          break;
+      }
+    }
+    return done({ ...patch, turn: won ? me : foe, winner: won ? me : null });
   };
+
+  /** 見えない壁にさえぎられて、動けなかった（手番だけ使う。Skill は使ったことにならない） */
+  const bump = (): ApplyResult => done({ walls: revealedGhosts(state, me) });
 
   if (action.type === 'move') {
     if (!legalPawnMoves(state).some((p) => samePos(p, action.to))) return { ok: false, reason: '動けないマス' };
+    if (!legalPawnMoves(state, state.walls).some((p) => samePos(p, action.to))) return bump();
     return moveTo(action.to, state.abilities);
   }
 
@@ -418,10 +750,19 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
     if (wall.half === undefined) wallsLeft[me] -= 1;
     else shortWalls[me] -= 1;
     const placed: Wall = { ...wall, owner: me };
-    return { ok: true, state: { ...state, walls: [...state.walls, placed], wallsLeft, shortWalls, wallBlocked, meteors, turn: foe } };
+    return done({ walls: [...state.walls, placed], wallsLeft, shortWalls });
   }
 
-  // 能力
+  if (action.type === 'attack') {
+    const out = attackOutcome(state, action);
+    if (out.error !== undefined || out.patch === undefined) return { ok: false, reason: out.error ?? '撃てない' };
+    const attackUsed: [boolean, boolean] = [state.attackUsed[0], state.attackUsed[1]];
+    attackUsed[me] = true;
+    return done({ ...out.patch, attackUsed });
+  }
+
+  // Skill
+  if (wasSealed) return { ok: false, reason: '封印されていて、Skill が使えない' };
   const mine = state.abilities[me];
   const index = mine.indexOf(action.id);
   if (index < 0) return { ok: false, reason: 'その能力を持っていない' };
@@ -432,9 +773,11 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
   const shortWalls: [number, number] = [state.shortWalls[0], state.shortWalls[1]];
 
   switch (action.id) {
-    case 'diagonal':
+    case 'diagonal': {
       if (!legalDiagonalMoves(state).some((p) => samePos(p, action.to))) return { ok: false, reason: '斜めに動けないマス' };
+      if (!legalDiagonalMoves(state, state.walls).some((p) => samePos(p, action.to))) return bump();
       return moveTo(action.to, abilities);
+    }
 
     case 'leap':
       if (!legalLeapMoves(state).some((p) => samePos(p, action.to))) return { ok: false, reason: '跳べないマス' };
@@ -442,10 +785,12 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
 
     case 'nova': {
       if (!legalPawnMoves(state).some((p) => samePos(p, action.first))) return { ok: false, reason: '1 回目に動けないマス' };
-      if (action.first.y === goalRow(state.size, me)) return moveTo(action.first, abilities); // 1 回目でゴール
+      if (!legalPawnMoves(state, state.walls).some((p) => samePos(p, action.first))) return bump();
+      if (action.first.y === goalRow(state.size, me)) return moveTo(action.first, abilities);
       const second = action.second;
       if (!second) return { ok: false, reason: '2 回目の行き先がない' };
       if (!novaSecondMoves(state, action.first).some((p) => samePos(p, second))) return { ok: false, reason: '2 回目に動けないマス' };
+      if (!novaSecondMoves(state, action.first, state.walls).some((p) => samePos(p, second))) return bump();
       return moveTo(second, abilities);
     }
 
@@ -453,27 +798,21 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
       const target = reclaimableWalls(state).find((w) => sameWall(w, action.wall));
       if (!target) return { ok: false, reason: '戻せる自分の壁がない' };
       giveBack(target, wallsLeft, shortWalls);
-      return {
-        ok: true,
-        state: { ...state, walls: state.walls.filter((w) => w !== target), wallsLeft, shortWalls, abilities, wallBlocked, meteors, turn: foe },
-      };
+      return done({ walls: state.walls.filter((w) => w !== target), wallsLeft, shortWalls, abilities });
     }
 
     case 'aegis': {
       const target = reclaimableWalls(state).find((w) => sameWall(w, action.wall));
       if (!target) return { ok: false, reason: '鉄壁にできる自分の壁がない' };
       const walls = state.walls.map((w) => (w === target ? { ...w, iron: true } : w));
-      return { ok: true, state: { ...state, walls, abilities, wallBlocked, meteors, turn: foe } };
+      return done({ walls, abilities });
     }
 
     case 'void': {
       const target = voidTargets(state).find((w) => sameWall(w, action.wall));
       if (!target) return { ok: false, reason: '消せる壁がない（鉄壁は消せない）' };
       giveBack(target, wallsLeft, shortWalls);
-      return {
-        ok: true,
-        state: { ...state, walls: state.walls.filter((w) => w !== target), wallsLeft, shortWalls, abilities, wallBlocked, meteors, turn: foe },
-      };
+      return done({ walls: state.walls.filter((w) => w !== target), wallsLeft, shortWalls, abilities });
     }
 
     case 'meteor': {
@@ -481,7 +820,7 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
       const target = meteorTarget(state);
       if (problem !== null || target === null) return { ok: false, reason: problem ?? '落とす場所がない' };
       const fallen: Meteor = { x: target.x, y: target.y, victim: foe, turnsLeft: METEOR_TURNS };
-      return { ok: true, state: { ...state, abilities, wallBlocked, meteors: [...meteors, fallen], turn: foe } };
+      return done({ abilities, meteors: [...meteors, fallen] });
     }
 
     case 'gravity': {
@@ -490,34 +829,93 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
       if (problem !== null || target === null) return { ok: false, reason: problem ?? '引き戻す先がない' };
       const pawns: [Pos, Pos] = [state.pawns[0], state.pawns[1]];
       pawns[foe] = target;
-      return { ok: true, state: { ...state, pawns, abilities, wallBlocked, meteors, turn: foe } };
+      return done({ pawns, abilities });
     }
 
     case 'stasis': {
-      // 相手の手番を飛ばす。相手の手番が 1 回終わったものとして、相手の電波妨害は解け、相手の隕石の残りは減る
+      // 相手の手番を飛ばす。相手の手番が 1 回終わったものとして、相手の電波妨害・封印は解け、相手の隕石の残りは減る
       wallBlocked[foe] = false;
-      return { ok: true, state: { ...state, abilities, wallBlocked, meteors: tickMeteors(meteors, foe), turn: me } };
+      sealed[foe] = false;
+      return { ok: true, state: { ...state, abilities, wallBlocked, sealed, meteors: tickMeteors(meteors, foe), turn: me } };
     }
 
     case 'triwall': {
       shortWalls[me] += SHORT_WALLS_PER_USE;
-      return { ok: true, state: { ...state, abilities, shortWalls, wallBlocked, meteors, turn: foe } };
+      return done({ abilities, shortWalls });
     }
 
     case 'chaos': {
       if (chaosMovableWalls(state).length === 0) return { ok: false, reason: '動かせる壁がない' };
       const result = chaosResult(state, action.seed);
-      return { ok: true, state: { ...state, ...result, abilities, wallBlocked, meteors, turn: foe } };
+      return done({ ...result, abilities });
     }
 
     case 'invert': {
       const board = invertedBoard({ ...state, meteors });
-      return { ok: true, state: { ...state, ...board, abilities, wallBlocked, turn: foe } };
+      return { ok: true, state: { ...state, ...board, abilities, wallBlocked, sealed, turn: foe } };
     }
 
     case 'jam':
       if (state.wallBlocked[foe]) return { ok: false, reason: '相手はすでに壁を封じられている' };
       wallBlocked[foe] = true;
-      return { ok: true, state: { ...state, abilities, wallBlocked, meteors, turn: foe } };
+      return done({ abilities });
+
+    case 'supply':
+      wallsLeft[me] += 1;
+      return done({ abilities, wallsLeft });
+
+    case 'gate': {
+      const to = gateTarget(state);
+      if (to === null) return { ok: false, reason: '門をくぐれない' };
+      return moveTo(to, abilities);
+    }
+
+    case 'thunder': {
+      const hits = thunderHits(state);
+      if (hits.length === 0) return { ok: false, reason: '壊せる物がない' };
+      return done({ ...removeHits(state, hits), abilities });
+    }
+
+    case 'rift': {
+      const target = riftTargets(state).find((w) => sameWall(w, action.wall));
+      if (!target) return { ok: false, reason: '回せる壁がない' };
+      const turned = riftResult(state, target);
+      if (turned === null) return { ok: false, reason: '回せない' };
+      return done({ walls: state.walls.map((w) => (w === target ? { ...w, o: turned.o } : w)), abilities });
+    }
+
+    case 'seize': {
+      const target = seizeTargets(state).find((w) => sameWall(w, action.wall));
+      if (!target) return { ok: false, reason: '奪える相手の壁がない' };
+      return done({ walls: state.walls.map((w) => (w === target ? { ...w, owner: me, ghost: false } : w)), abilities });
+    }
+
+    case 'trapStun':
+    case 'trapBack':
+    case 'trapConfiscate':
+    case 'trapSeal': {
+      const problem = trapProblem(state, action.at);
+      if (problem !== null) return { ok: false, reason: problem };
+      const kind: TrapKind = action.id === 'trapStun' ? 'stun' : action.id === 'trapBack' ? 'back' : action.id === 'trapConfiscate' ? 'confiscate' : 'seal';
+      // 罠を仕掛けるのは、手番を使わない（使うと、罠を使ったことが相手に分かってしまうため）。手番は、そのまま続く
+      return { ok: true, state: { ...state, abilities, traps: [...state.traps, { x: action.at.x, y: action.at.y, owner: me, kind }] } };
+    }
+
+    case 'trapShove': {
+      const problem = trapProblem(state, action.at);
+      if (problem !== null) return { ok: false, reason: problem };
+      if (Math.abs(action.dx) + Math.abs(action.dy) !== 1) return { ok: false, reason: '飛ばす向きが正しくない' };
+      return { ok: true, state: { ...state, abilities, traps: [...state.traps, { x: action.at.x, y: action.at.y, owner: me, kind: 'shove', dx: action.dx, dy: action.dy }] } };
+    }
+
+    case 'trapGhost': {
+      const wall: WallSpec = { x: action.wall.x, y: action.wall.y, o: action.wall.o };
+      if (state.wallBlocked[me]) return { ok: false, reason: '電波妨害で、この手番は壁を置けない' };
+      if (state.wallsLeft[me] <= 0) return { ok: false, reason: '壁の残りがない' };
+      const problem = wallFits(state, state.walls, wall);
+      if (problem !== null) return { ok: false, reason: problem };
+      wallsLeft[me] -= 1;
+      return { ok: true, state: { ...state, abilities, wallsLeft, walls: [...state.walls, { ...wall, owner: me, ghost: true }] } };
+    }
   }
 }
