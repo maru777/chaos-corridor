@@ -12,6 +12,8 @@ export interface ResultView {
   readonly total: number;
   /** 相手の呼び名（例: CPU ★★★☆☆ 策士） */
   readonly foe: string;
+  /** オンライン対戦: Gold も「もう一度」もない（メニューだけ） */
+  readonly online?: boolean;
   readonly onAgain: () => void;
   readonly onMenu: () => void;
 }
@@ -88,7 +90,8 @@ export function showResult(v: ResultView): () => void {
   const buttons = el('div', 'res-buttons');
   const again = el('button', 'res-btn primary', 'もう一度');
   const menu = el('button', 'res-btn', 'メニュー');
-  buttons.append(again, menu);
+  if (v.online === true) buttons.append(menu);
+  else buttons.append(again, menu);
   const fx = el('div', 'res-fx');
   if (v.won) {
     for (let i = 0; i < 70; i++) {
@@ -115,13 +118,16 @@ export function showResult(v: ResultView): () => void {
       fx.appendChild(s);
     }
   }
-  root.replaceChildren(bg, fx, flash, word, vs, gold, buttons);
+  if (v.online === true) menu.classList.add('primary');
+  root.replaceChildren(bg, fx, flash, word, vs, ...(v.online === true ? [] : [gold]), buttons);
   if (v.won) playWinSfx();
   else playLoseSfx();
-  window.setTimeout(() => countUp(gain, v.gained, 1100, '+'), 1100);
-  window.setTimeout(() => {
-    total.textContent = `所持 ${fmt(v.total)} G`;
-  }, 2300);
+  if (v.online !== true) window.setTimeout(() => countUp(gain, v.gained, 1100, '+'), 1100);
+  if (v.online !== true) {
+    window.setTimeout(() => {
+      total.textContent = `所持 ${fmt(v.total)} G`;
+    }, 2300);
+  }
   const hide = () => {
     root.hidden = true;
     root.replaceChildren();

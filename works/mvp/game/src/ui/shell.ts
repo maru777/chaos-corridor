@@ -34,6 +34,8 @@ export interface Shell {
   isOpen(): boolean;
   openMenu(): void;
   openCodex(): void;
+  /** 対戦を始める（メニューを閉じる処理を渡す。暗転した裏で、closeMenu を呼ぶ） */
+  enter(run: (closeMenu: () => void) => void): void;
 }
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -50,11 +52,21 @@ export function createShell(opts: ShellOptions): Shell {
   const levels = byId('levels');
   const shop = byId('shop');
   const logModal = byId('log');
+  const onlineModal = byId('online');
 
   // 攻撃技の あり / なし（選んだ設定は、次回も覚えておく）
   const attacksBox = byId('levels-attacks') as HTMLInputElement;
   attacksBox.checked = loadAttacksOn();
   attacksBox.addEventListener('change', () => saveAttacksOn(attacksBox.checked));
+  const onlineBox = byId('online-weapons') as HTMLInputElement;
+  onlineBox.checked = attacksBox.checked;
+  onlineBox.addEventListener('change', () => {
+    saveAttacksOn(onlineBox.checked);
+    attacksBox.checked = onlineBox.checked;
+  });
+  attacksBox.addEventListener('change', () => {
+    onlineBox.checked = attacksBox.checked;
+  });
 
   // CPU の段階の選択肢
   const levelList = byId('levels-list');
@@ -162,6 +174,9 @@ export function createShell(opts: ShellOptions): Shell {
       case 'restart':
         opts.onRestart(() => dispatch('resume'));
         break;
+      case 'online':
+        openModal(onlineModal);
+        break;
       case 'shop':
         openModal(shop);
         break;
@@ -196,9 +211,10 @@ export function createShell(opts: ShellOptions): Shell {
   byId('shop-close').addEventListener('click', () => closeModal(shop));
   byId('log-close').addEventListener('click', () => closeModal(logModal));
   byId('levels-close').addEventListener('click', () => closeModal(levels));
+  byId('online-close').addEventListener('click', () => closeModal(onlineModal));
   byId('codex-close').addEventListener('click', () => closeModal(codex));
   byId('rules-close').addEventListener('click', () => closeModal(rules));
-  for (const m of [codex, rules, levels, shop, logModal]) {
+  for (const m of [codex, rules, levels, shop, logModal, onlineModal]) {
     m.addEventListener('click', (e) => {
       if (e.target === m) closeModal(m); // 枠の外を押したら閉じる
     });
@@ -206,7 +222,8 @@ export function createShell(opts: ShellOptions): Shell {
 
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!logModal.hidden) closeModal(logModal);
+    if (!onlineModal.hidden) closeModal(onlineModal);
+    else if (!logModal.hidden) closeModal(logModal);
     else if (!shop.hidden) closeModal(shop);
     else if (!levels.hidden) closeModal(levels);
     else if (!codex.hidden) closeModal(codex);
@@ -217,8 +234,15 @@ export function createShell(opts: ShellOptions): Shell {
   setPhase(phase);
 
   return {
-    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden || !levels.hidden || !shop.hidden || !logModal.hidden,
+    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden || !levels.hidden || !shop.hidden || !logModal.hidden || !onlineModal.hidden,
     openMenu: () => dispatch('openMenu'),
     openCodex: () => openModal(codex),
+    enter: (run) =>
+      run(() => {
+        closeModal(levels);
+        closeModal(onlineModal);
+        started = true;
+        dispatch('start');
+      }),
   };
 }

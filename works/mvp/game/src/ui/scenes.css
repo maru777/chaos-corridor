@@ -202,3 +202,11 @@
 @keyframes tb-slam { 0%, 14% { transform: scale(2.6) skewX(-8deg); opacity: 0; } 28% { transform: scale(1) skewX(-8deg); opacity: 1; } 78% { transform: scale(1) skewX(-8deg); opacity: 1; } 100% { transform: scale(1) translateX(60vw) skewX(-8deg); opacity: 0; } }
 @keyframes tb-pop { 0%, 24% { transform-origin: 50% 50%; opacity: 0; } 34% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tb-flash, .tb-ring, .tb-red, .tb-black, .tb-title { animation: none; } }
+
+/* オンライン対戦の部屋 */
+#online-host { width: 100%; margin-bottom: 14px; }
+.on-join { display: flex; gap: 10px; align-items: stretch; margin-bottom: 14px; }
+#online-code { width: 120px; flex: none; padding: 6px 10px; font: 900 italic 30px/1 sans-serif; letter-spacing: 0.2em; text-align: center; color: #05030f; background: #fff; border: 4px solid #05030f; box-shadow: 4px 4px 0 #d4001a; transform: skewX(-8deg); }
+.on-join .op-btn { flex: 1; }
+.on-code { margin: 4px 0 12px; padding: 8px 12px; text-align: center; font: 900 italic 54px/1.1 sans-serif; letter-spacing: 0.28em; color: #fff; background: #05030f; box-shadow: 6px 6px 0 #d4001a; transform: skewX(-8deg); }
+.on-code small { display: block; font-size: 12px; letter-spacing: 0.1em; color: #ffb3bb; }

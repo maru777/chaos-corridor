@@ -274,6 +274,22 @@
       </div>
     </div>
 
+    <div id="online" class="overlay modal" hidden>
+      <div class="modal-box" role="dialog" aria-label="オンライン対戦">
+        <header><h2>オンライン対戦</h2><button id="online-close">とじる</button></header>
+        <div class="modal-body">
+          <label class="levels-opt"><span class="lo-text"><b>WEAPONS</b><small>部屋をつくる人の設定が、使われます</small></span><input type="checkbox" id="online-weapons" role="switch" aria-label="WEAPONS"></label>
+          <button id="online-host" class="op-btn primary">部屋をつくる</button>
+          <div class="on-join">
+            <input id="online-code" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off" aria-label="部屋コード">
+            <button id="online-join" class="op-btn">部屋に入る</button>
+          </div>
+          <div id="online-code-show" class="on-code" hidden></div>
+          <p id="online-status" class="levels-note"></p>
+        </div>
+      </div>
+    </div>
+
     <div id="shop" class="overlay modal" hidden>
       <div class="modal-box" role="dialog" aria-label="ショップ">
         <header><h2>ショップ</h2><span id="shop-gold" class="gold-chip"></span><button id="shop-close">とじる</button></header>

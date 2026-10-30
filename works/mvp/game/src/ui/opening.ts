@@ -28,7 +28,7 @@ export function nextPhase(phase: OpeningPhase, event: OpeningEvent): OpeningPhas
 export type MatchChoice = { readonly vs: 'local' } | { readonly vs: 'cpu'; readonly level: number; readonly attacks: boolean }; // 'local'（1 台で二人）は、確認用。メニューには出さない
 
 export interface MenuItem {
-  readonly id: 'cpu' | 'shop' | 'log' | 'resume' | 'codex' | 'rules' | 'restart';
+  readonly id: 'cpu' | 'online' | 'shop' | 'log' | 'resume' | 'codex' | 'rules' | 'restart';
   readonly label: string;
   /** 目立たせるボタン */
   readonly primary: boolean;
@@ -39,6 +39,7 @@ export function menuItems(started: boolean): MenuItem[] {
   return [
     ...(started ? ([{ id: 'resume', label: 'つづける', primary: true }] as const) : []),
     { id: 'cpu', label: started ? 'CPU と新しく対戦' : 'CPU と対戦', primary: !started },
+    { id: 'online', label: 'オンライン対戦', primary: false },
     { id: 'shop', label: 'ショップ', primary: false },
     { id: 'log', label: '戦績', primary: false },
     { id: 'codex', label: 'Skill 一覧', primary: false },

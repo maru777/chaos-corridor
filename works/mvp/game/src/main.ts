@@ -53,6 +53,8 @@ import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
 import { loadLog, loadWallet, saveLog, saveWallet } from './save';
 import { pickAttack } from './ui/attackpick';
+import { Room, applyRemote, isRoomCode, newRoomCode } from './online';
+import type { OnlineMsg } from './online';
 import { TRAP_BURST_MS, showTrapBurst } from './ui/trapburst';
 import { addEntry } from './matchlog';
 import type { MatchEntry } from './matchlog';
@@ -130,12 +132,36 @@ let shortMode = false;
 /** 手札を見ているか（手番が替わると、また伏せる）。相手に見せないための決まり */
 let lastTurn: PlayerId = 0;
 /** 対戦の形（CPU か、二人で）と、CPU の強さ。参加者 A（あなた / プレイヤー1）の席。CPU が座っている席（CPU 戦でなければ null） */
-let vs: 'cpu' | 'local' = 'local';
+let vs: 'cpu' | 'local' | 'online' = 'local';
 let cpuLevel = 5;
 /** 攻撃技あり（CPU 戦の設定。「同じ相手で、やりなおす」でも引き継ぐ） */
 let attacksOn = false;
 let seatA: PlayerId = 0;
 let cpuSeat: PlayerId | null = null;
+/** オンライン対戦の相手の席（オンラインでなければ null）。画面の操作は、相手の番のあいだ、止める */
+let onlineSeat: PlayerId | null = null;
+
+/** オンライン対戦の接続 */
+interface OnlineSession {
+  readonly room: Room;
+  /** 部屋をつくった人か */
+  readonly host: boolean;
+  /** 対局が始まったか（始まる前に閉じたら、部屋を出る） */
+  started: boolean;
+  /** 相手が選んだ WEAPON（まだ届いていなければ undefined） */
+  pick?: AttackId;
+  onPick?: (id: AttackId | null) => void;
+  /** 届いた相手の手（演出が終わったら、順に反映する） */
+  queue: { a: Action; h: string }[];
+  /** 相手がいなくなった・状態がずれたなどで、続けられない */
+  ended: boolean;
+}
+let online: OnlineSession | null = null;
+
+/** CPU か、オンラインの相手の席。なければ null（1 台で二人のとき） */
+function opponentSeat(): PlayerId | null {
+  return cpuSeat ?? onlineSeat;
+}
 /** コイントスの最中は、操作を受け付けない */
 let tossing = false;
 let cpuReadyAt = 0;
@@ -186,17 +212,20 @@ const btnReset = el<HTMLButtonElement>('btn-reset');
 
 /** 人の操作を受け付けないか（演出中・コイントス中・CPU の番） */
 function locked(): boolean {
-  return busy || tossing || (cpuSeat !== null && state.winner === null && state.turn === cpuSeat);
+  const foeTurn = opponentSeat() !== null && state.winner === null && state.turn === opponentSeat();
+  return busy || tossing || foeTurn || (online?.ended === true && state.winner === null);
 }
 
 /** 画面に手札を出す席。CPU 戦では、CPU の番でも、あなたの手札のまま */
 function handSeat(): PlayerId {
-  return cpuSeat === null ? state.turn : cpuSeat === 0 ? 1 : 0;
+  const foe = opponentSeat();
+  return foe === null ? state.turn : foe === 0 ? 1 : 0;
 }
 
 function seatLabel(p: PlayerId): string {
   const isA = p === seatA;
   if (vs === 'cpu') return isA ? 'あなた' : `CPU ${levelStars(cpuLevel)} ${LEVEL_NAMES[cpuLevel - 1] ?? ''}`;
+  if (vs === 'online') return isA ? 'あなた' : '相手';
   return isA ? 'プレイヤー1' : 'プレイヤー2';
 }
 
@@ -483,7 +512,7 @@ function renderPlayerCards(): void {
       if (at >= 0) {
         rest.splice(at, 1);
         cards.appendChild(debugShowAll ? miniCard(id) : div('mini-back'));
-      } else if (isTrapSkill(id) && state.winner === null && cpuSeat !== null && p === cpuSeat && !debugShowAll) {
+      } else if (isTrapSkill(id) && state.winner === null && opponentSeat() !== null && p === opponentSeat() && !debugShowAll) {
         // 相手が使った罠系の Skill は、表向きにしない（罠を使ったことが、分からないように）
         const back = div('mini-back used');
         cards.appendChild(back);
@@ -602,7 +631,7 @@ function refresh(): void {
   if (mode !== 'nova2') novaFirst = null;
   if (!(state.shortWalls[state.turn] > 0)) shortMode = false;
   let markers: readonly { x: number; y: number }[] = [];
-  if (state.winner === null && !(cpuSeat !== null && state.turn === cpuSeat)) {
+  if (state.winner === null && !(opponentSeat() !== null && state.turn === opponentSeat())) {
     if (mode === 'move' || mode === 'nova1') markers = legalPawnMoves(state);
     else if (mode === 'diagonal') markers = legalDiagonalMoves(state);
     else if (mode === 'leap') markers = legalLeapMoves(state);
@@ -614,13 +643,13 @@ function refresh(): void {
       );
     }
   }
-  view.setViewer(cpuSeat !== null ? seatA : null);
+  view.setViewer(opponentSeat() !== null ? seatA : null);
   view.setState(state, markers);
   if (state.winner !== null) {
     statusEl.textContent = `${NAMES[state.winner]}の勝ち`;
     statusEl.dataset.turn = String(state.winner);
   } else {
-    statusEl.textContent = `${NAMES[state.turn]}の番${cpuSeat !== null && state.turn === cpuSeat ? '　CPU 考え中…' : ''}`;
+    statusEl.textContent = `${NAMES[state.turn]}の番${cpuSeat !== null && state.turn === cpuSeat ? '　CPU 考え中…' : onlineSeat !== null && state.turn === onlineSeat ? '　相手を待っています' : ''}`;
     statusEl.dataset.turn = String(state.turn);
   }
   btnMove.setAttribute('aria-pressed', String(mode === 'move'));
@@ -630,7 +659,8 @@ function refresh(): void {
   // 短い壁を持っているときだけ、壁の長さを切り替えるボタンを出す
   btnLength.hidden = !(state.winner === null && state.shortWalls[state.turn] > 0);
   btnLength.textContent = `壁の長さ: ${shortMode ? '短 1マス' : '長 2マス'}`;
-  btnUndo.disabled = log.length === 0;
+  btnUndo.disabled = log.length === 0 || vs === 'online';
+  btnReset.disabled = vs === 'online';
   hashEl.hidden = !params.has('debug');
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
   if (state.winner !== null && cpuSeat !== null && !awarded) {
@@ -651,12 +681,21 @@ function refresh(): void {
       showResult({ won, gained: g, total: wallet.gold, foe, onAgain: () => resetGame(), onMenu: () => shell.openMenu() });
     }, 1300);
   }
+  if (state.winner !== null && online !== null && !awarded) {
+    // オンライン対戦は、Gold も戦績もなし。結果の画面だけ
+    awarded = true;
+    const won = state.winner === seatA;
+    window.setTimeout(() => {
+      if (state.winner === null) return;
+      showResult({ won, gained: 0, total: wallet.gold, foe: 'オンライン対戦', online: true, onAgain: () => undefined, onMenu: () => shell.openMenu() });
+    }, 1300);
+  }
   renderPlayerCards();
   renderHand();
   view.relayout();
 }
 
-function play(action: Action): void {
+function play(action: Action, fromRemote = false): void {
   if (busy) return;
   const r = applyAction(state, action);
   if (!r.ok) {
@@ -665,6 +704,8 @@ function play(action: Action): void {
   }
   const mover = state.turn;
   const before = state;
+  // オンライン: 自分の手は、手と打ったあとの状態のハッシュを、相手に送る
+  if (online !== null && !fromRemote && onlineSeat !== null && mover !== onlineSeat) online.room.send({ k: 'act', a: action, h: stateHash(r.state) });
   say('');
   if (mode !== 'move' && mode !== 'wall') mode = 'move';
   novaFirst = null;
@@ -776,7 +817,7 @@ function popFor(action: Action, mover: PlayerId): void {
     showPop(pops, 'move', p.x, p.y, color, playMoveSfx(mover));
   }
   // CPU 戦は、専用の結果画面を出す（勝ちの擬音が、画面いっぱいに拡大して、見づらかった）。二人で遊ぶときだけ、擬音を出す
-  if (state.winner !== null && cpuSeat === null) showPop(pops, 'win', 0, 0, '#ffd46a');
+  if (state.winner !== null && opponentSeat() === null) showPop(pops, 'win', 0, 0, '#ffd46a');
 }
 
 function replay(forSeed: number, actions: readonly Action[]): GameState {
@@ -929,6 +970,7 @@ btnUndo.addEventListener('click', () => {
  * 場面は、急に切り替えず、いったん暗転して、幕が斜めに抜けて出る。
  */
 async function startMatch(choice: MatchChoice, closeMenu: () => void = () => undefined, animate = true): Promise<void> {
+  leaveOnline();
   vs = choice.vs;
   if (choice.vs === 'cpu') {
     cpuLevel = choice.level;
@@ -991,7 +1033,218 @@ async function startMatch(choice: MatchChoice, closeMenu: () => void = () => und
   if (animate) await revealScreen();
 }
 
+// ---- オンライン対戦 ----
+
+function onlineStatus(text: string): void {
+  el('online-status').textContent = text;
+}
+
+function showRoomCode(code: string | null): void {
+  const box = el('online-code-show');
+  box.hidden = code === null;
+  box.replaceChildren();
+  if (code === null) return;
+  const small = document.createElement('small');
+  small.textContent = '部屋コード。相手に伝えてください';
+  box.append(code, small);
+}
+
+/** 部屋を出て、接続を閉じる */
+function leaveOnline(): void {
+  const s = online;
+  online = null;
+  onlineSeat = null;
+  if (s === null) return;
+  s.onPick?.(null);
+  s.room.send({ k: 'bye' });
+  s.room.close();
+}
+
+/** 相手がいなくなった・通信が切れた・状態がずれた: これ以上は、続けられない */
+function endOnline(text: string): void {
+  const s = online;
+  if (s === null || s.ended) return;
+  s.ended = true;
+  s.onPick?.(null);
+  if (!s.started) {
+    onlineStatus(text);
+    return;
+  }
+  say(`${text}。メニューから、ほかの対戦を選べます`);
+  refresh();
+}
+
+function wireSession(s: OnlineSession): void {
+  const { room } = s;
+  room.onmessage = (m: OnlineMsg) => {
+    if (online !== s) return;
+    if (m.k === 'start') {
+      if (s.host || s.started) return;
+      s.started = true;
+      onlineStatus('はじまります…');
+      shell.enter((closeMenu) => void startOnlineMatch(s, m.seed, m.weapons, closeMenu));
+    } else if (m.k === 'pick') {
+      s.pick = m.id;
+      s.onPick?.(m.id);
+    } else if (m.k === 'act') s.queue.push({ a: m.a, h: m.h });
+    else if (m.k === 'bye') endOnline('相手が対局をやめました');
+  };
+  room.onpeerleave = () => {
+    if (online === s) endOnline('相手がいなくなりました');
+  };
+  room.onclose = (reason) => {
+    if (online !== s) return;
+    endOnline(reason === 'room-full' ? 'その部屋は、満員です' : s.started ? '通信が切れました' : 'つながりませんでした');
+  };
+}
+
+/** 部屋をつくる。コードを出して、相手が入るのを待つ。入ったら、種と WEAPONS の設定を送って、始める */
+function hostRoom(attempt = 0): void {
+  leaveOnline();
+  const code = newRoomCode();
+  const room = new Room(code);
+  const s: OnlineSession = { room, host: true, started: false, queue: [], ended: false };
+  online = s;
+  showRoomCode(null);
+  onlineStatus('部屋をつくっています…');
+  wireSession(s);
+  room.onwelcome = (_seat, peers) => {
+    if (online !== s) return;
+    if (peers > 0) {
+      // そのコードは、もう使われている: 別のコードで、やりなおす
+      if (attempt < 5) hostRoom(attempt + 1);
+      else onlineStatus('部屋をつくれませんでした。もう一度押してください');
+      return;
+    }
+    showRoomCode(code);
+    onlineStatus('相手が入るのを待っています');
+  };
+  room.onpeerjoin = () => {
+    if (online !== s || s.started) return;
+    s.started = true;
+    const seedValue = newSeed();
+    const weapons = (el('online-weapons') as HTMLInputElement).checked;
+    room.send({ k: 'start', seed: seedValue, weapons });
+    shell.enter((closeMenu) => void startOnlineMatch(s, seedValue, weapons, closeMenu));
+  };
+}
+
+/** 部屋に入る。部屋が見つからなければ、知らせる */
+function joinRoom(code: string): void {
+  leaveOnline();
+  if (!isRoomCode(code)) {
+    onlineStatus('部屋コードは、4 桁の数字です');
+    return;
+  }
+  const room = new Room(code);
+  const s: OnlineSession = { room, host: false, started: false, queue: [], ended: false };
+  online = s;
+  showRoomCode(null);
+  onlineStatus('つなげています…');
+  wireSession(s);
+  room.onwelcome = (_seat, peers) => {
+    if (online !== s) return;
+    if (peers === 0) {
+      leaveOnline();
+      onlineStatus('その部屋は、まだありません。コードを確かめてください');
+      return;
+    }
+    onlineStatus('つながりました。はじまるのを待っています');
+  };
+}
+
+/** オンライン対戦の開始: 暗転 → コイントス → Skill を引く → WEAPON を選ぶ（相手も選ぶまで待つ） → 対局 */
+async function startOnlineMatch(s: OnlineSession, seedValue: number, weapons: boolean, closeMenu: () => void): Promise<void> {
+  vs = 'online';
+  attacksOn = weapons;
+  cpuSeat = null;
+  tossing = true;
+  await coverScreen();
+  closeMenu();
+  seed = seedValue;
+  chosenAttacks = [null, null];
+  state = newGame(seed, chosenAttacks);
+  log = [];
+  mode = 'move';
+  armedAbility = null;
+  awarded = false;
+  debugForcedResult = false;
+  lastInsets = null;
+  lastTurn = state.turn;
+  // 先に動く人は、種で決まる。部屋をつくった人が参加者 A。自分から見た「自分が先か」に直す
+  const first = tossFirst(seed);
+  const myFirst: 0 | 1 = s.host ? first : first === 0 ? 1 : 0;
+  seatA = seatOfA(myFirst);
+  const foe: PlayerId = seatA === 0 ? 1 : 0;
+  onlineSeat = foe;
+  view.setFlipped(seatA === 1); // 自分のコマが、いつも手前
+  say('');
+  refresh();
+  const hideToss = await showToss({ a: 'あなた', b: '相手', first: myFirst, firstSeat: NAMES[0], secondSeat: NAMES[1] }, revealScreen);
+  await coverScreen();
+  hideToss();
+  const hideDraw = await playDraws(state.abilities[seatA], seed, revealScreen, `相手も ${state.abilities[foe].length} 枚引いた`);
+  await coverScreen();
+  hideDraw();
+  if (weapons && !s.ended) {
+    const picked = await pickAttack(dealGame(seed).offers[seatA], revealScreen);
+    s.room.send({ k: 'pick', id: picked.id });
+    picked.wait('相手が選ぶのを待っています');
+    const foePick: AttackId | null = s.pick ?? (await new Promise<AttackId | null>((resolve) => (s.onPick = resolve)));
+    await coverScreen();
+    picked.hide();
+    if (foePick !== null) {
+      chosenAttacks = seatA === 0 ? [picked.id, foePick] : [foePick, picked.id];
+      state = newGame(seed, chosenAttacks);
+      lastTurn = state.turn;
+    }
+  }
+  tossing = false;
+  refresh();
+  await revealScreen();
+  if (s.ended) say('相手がいなくなりました。メニューから、ほかの対戦を選べます');
+}
+
+/** 届いた相手の手を、演出が落ち着いてから、順に反映する。反則・順番違い・状態のずれは、ここで見つける */
+function drainRemote(): void {
+  const s = online;
+  if (s === null || onlineSeat === null || s.queue.length === 0 || busy || tossing) return;
+  const next = s.queue.shift();
+  if (next === undefined) return;
+  const got = applyRemote(state, onlineSeat, next.a, next.h);
+  if (!got.ok) {
+    endOnline(`同期がずれました。${got.reason}`);
+    return;
+  }
+  play(next.a, true);
+}
+window.setInterval(drainRemote, 100);
+
+el('online-host').addEventListener('click', () => hostRoom());
+el('online-join').addEventListener('click', () => joinRoom((el('online-code') as HTMLInputElement).value.trim()));
+el('online-code').addEventListener('input', (e) => {
+  const input = e.target as HTMLInputElement;
+  input.value = input.value.replace(/\D/g, '').slice(0, 4);
+});
+el('online-code').addEventListener('keydown', (e) => {
+  if ((e as KeyboardEvent).key === 'Enter') joinRoom((el('online-code') as HTMLInputElement).value.trim());
+});
+// 部屋の画面を閉じたとき、まだ対局が始まっていなければ、部屋を出る
+el('online-close').addEventListener('click', () => {
+  if (online !== null && !online.started) {
+    leaveOnline();
+    showRoomCode(null);
+    onlineStatus('');
+  }
+});
+
 function resetGame(closeMenu: () => void = () => undefined): void {
+  if (vs === 'online') {
+    // オンライン対戦は、やりなおせない（相手と同時に始める必要がある）。メニューから、新しく部屋をつくる
+    closeMenu();
+    say('オンライン対戦は、やりなおせません。メニューから、新しい部屋をつくってください');
+    return;
+  }
   void startMatch(vs === 'cpu' ? { vs, level: cpuLevel, attacks: attacksOn } : { vs }, closeMenu);
 }
 btnReset.addEventListener('click', () => {
@@ -1219,7 +1472,7 @@ if (params.has('debug')) {
   Object.assign(window, {
     __game: {
       startCpu: (level: number, attacks: boolean) => startMatch({ vs: 'cpu', level, attacks }, () => undefined, false),
-      get: () => ({ state, seatA, cpuSeat, busy, awarded }),
+      get: () => ({ state, seatA, cpuSeat, busy, awarded, tossing, onlineSeat, online: online === null ? null : { host: online.host, started: online.started, ended: online.ended, queue: online.queue.length, pick: online.pick ?? null } }),
       set: (s: GameState) => {
         state = s;
         refresh();

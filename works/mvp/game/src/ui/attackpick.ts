@@ -10,6 +10,8 @@ import { attackIconSvg } from './icons';
 
 export interface AttackPicked {
   readonly id: AttackId;
+  /** 選んだあと、相手を待つ間の表示にする（カードは押せなくなる） */
+  readonly wait: (text: string) => void;
   /** 場面を消す（暗転の裏で呼ぶ） */
   readonly hide: () => void;
 }
@@ -66,7 +68,15 @@ export function pickAttack(offers: readonly AttackId[], beforeStart: () => Promi
   return new Promise((resolve) => {
     ok.addEventListener('click', () => {
       if (chosen === null) return;
-      resolve({ id: chosen, hide: () => root.remove() });
+      resolve({
+        id: chosen,
+        wait: (text) => {
+          ok.disabled = true;
+          ok.textContent = text;
+          for (const c of cards.values()) c.disabled = true;
+        },
+        hide: () => root.remove(),
+      });
     });
     void beforeStart();
   });
