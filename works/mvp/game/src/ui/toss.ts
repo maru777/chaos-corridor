@@ -23,8 +23,9 @@ const SPIN_MS = 2300;
 
 /** 結果を、漫画のコマのように組む: 大きな「先手」の札と、名前の札、あとの人の小さな札 */
 function fillResult(box: HTMLElement, v: TossView): void {
-  const winner = v.first === 0 ? v.a : v.b;
-  const loser = v.first === 0 ? v.b : v.a;
+  // 自分（参加者 A）から見て、自分が先手か後手かを、いちばん大きく出す（相手が先手、では、ぱっと分かりづらい）
+  const mine = v.first === 0 ? v.firstSeat : v.secondSeat;
+  const theirs = v.first === 0 ? v.secondSeat : v.firstSeat;
   const mk = (cls: string, text: string) => {
     const e = document.createElement('span');
     e.className = cls;
@@ -33,7 +34,8 @@ function fillResult(box: HTMLElement, v: TossView): void {
     e.appendChild(t);
     return e;
   };
-  box.replaceChildren(mk('res-name', winner), mk('res-first', v.firstSeat), mk('res-second', `${loser} は ${v.secondSeat}`));
+  const big = mk(`res-first${v.first === 0 ? '' : ' late'}`, mine);
+  box.replaceChildren(mk('res-name', `${v.a} は`), big, mk('res-second', `${v.b} は ${theirs}`));
 }
 
 /** コインを回して、結果を見せる。タップ（または少し待つ）と終わる。動きを減らす設定のときは、回さずに結果だけ出す */

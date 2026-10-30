@@ -122,3 +122,6 @@
 @media (prefers-reduced-motion: reduce) { .dflash, .dburstlines, .donomat, .draw-field.punch { animation: none !important; } .dflash, .dburstlines { display: none; } .donomat { opacity: 1; } }
 
 .draw-field.fade { opacity: 0.22; transition: opacity 400ms; }
+
+/* 後手のときは、黒地に白で、先手と、ひと目で区別できるようにする */
+.toss-result .res-first.late { background: #05030f; color: #fff; filter: drop-shadow(6px 6px 0 #fff); }

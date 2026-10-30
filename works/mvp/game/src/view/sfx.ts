@@ -284,6 +284,35 @@ export function playDartSfx(durMs: number): void {
   tone(c, master, 'triangle', 300, 1400, t, Math.max(0.15, durMs / 1000), 0.12);
 }
 
+/** 勝ったときの音: 高らかな和音の上昇と、きらめき */
+export function playWinSfx(): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.3;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.02;
+  whoosh(c, master, 300, 6000, t, 0.25, 0.6);
+  tone(c, master, 'sine', 140, 50, t + 0.2, 0.6, 1.0);
+  [NOTE.C4, NOTE.E4, NOTE.G4, NOTE.C5].forEach((f, i) => tone(c, master, 'sawtooth', f, f, t + 0.2 + i * 0.09, 1.8, 0.1));
+  [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6, NOTE.G5, NOTE.C6, NOTE.E6].forEach((f, i) => tone(c, master, 'triangle', f, f, t + 0.45 + i * 0.12, 0.8, 0.26));
+}
+
+/** 負けたときの音: 重い衝撃のあと、短調の和音が、ずるずると沈む */
+export function playLoseSfx(): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.32;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.02;
+  thunderHit(c, master, t + 0.05, 1.0);
+  tone(c, master, 'sine', 90, 28, t + 0.05, 1.2, 1.0);
+  // 短調（ド・ミ♭・ソ）を、下へ滑らせる
+  for (const f of [NOTE.C4, NOTE.C4 * 1.189, NOTE.G4]) tone(c, master, 'sawtooth', f, f * 0.5, t + 0.3, 2.2, 0.1);
+  [NOTE.G5, NOTE.E5 * 0.944, NOTE.C5].forEach((f, i) => tone(c, master, 'triangle', f, f * 0.8, t + 0.7 + i * 0.35, 1.0, 0.22));
+}
+
 /** タイトルのロゴが「ドン!!」と落ちる音: 風を切る音 → 重い衝撃 → 長い和音ときらめき */
 export function playTitleSfx(): void {
   const c = getContext();

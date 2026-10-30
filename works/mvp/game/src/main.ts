@@ -29,12 +29,14 @@ import './ui/ui.css';
 import './ui/scenes.css';
 import './ui/persona.css';
 import './ui/shop.css';
+import './ui/result.css';
 import { handCount, visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
 import { coverScreen, revealScreen } from './ui/curtain';
 import { playDraws } from './ui/draw';
+import { showResult } from './ui/result';
 import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
 import { loadWallet, saveWallet } from './save';
@@ -447,7 +449,13 @@ function refresh(): void {
     const g = goldFor(cpuLevel, state.winner === seatA);
     wallet = earn(wallet, g);
     saveWallet(wallet);
-    say(`${g.toLocaleString('ja-JP')} G 獲得！（所持 ${wallet.gold.toLocaleString('ja-JP')} G）`);
+    const won = state.winner === seatA;
+    const foe = `CPU ${levelStars(cpuLevel)} ${LEVEL_NAMES[cpuLevel - 1] ?? ''}`;
+    // 最後の一手の演出が落ち着いてから、結果の画面を出す
+    window.setTimeout(() => {
+      if (state.winner === null) return;
+      showResult({ won, gained: g, total: wallet.gold, foe, onAgain: () => resetGame(), onMenu: () => shell.openMenu() });
+    }, 1300);
   }
   renderPlayerCards();
   renderHand();
@@ -501,7 +509,8 @@ function popFor(action: Action, mover: PlayerId): void {
     const p = view.project(w.x, w.z);
     showPop(pops, 'move', p.x, p.y, color, playMoveSfx(mover));
   }
-  if (state.winner !== null) showPop(pops, 'win', 0, 0, '#ffd46a');
+  // CPU 戦は、専用の結果画面を出す（勝ちの擬音が、画面いっぱいに拡大して、見づらかった）。二人で遊ぶときだけ、擬音を出す
+  if (state.winner !== null && cpuSeat === null) showPop(pops, 'win', 0, 0, '#ffd46a');
 }
 
 function replay(forSeed: number, actions: readonly Action[]): GameState {

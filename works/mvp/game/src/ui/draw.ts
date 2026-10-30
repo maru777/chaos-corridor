@@ -181,7 +181,9 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   root.classList.add('shake');
   field.classList.add('punch');
   if (!reduced()) {
-    const scale = { UNCOMMON: 1.5, RARE: 1.65, EPIC: 1.85, LEGENDARY: 2.1 }[rarity];
+    // 決まったカードは、画面の幅に収まる範囲で、できるだけ大きく見せる
+    const base = { UNCOMMON: 2.2, RARE: 2.4, EPIC: 2.6, LEGENDARY: 2.9 }[rarity];
+    const scale = Math.min(base, (fr.width * 0.86) / 112);
     reveal.animate(
       [
         { transform: `translate(${dx}px, ${dy}px) scale(1)` },
@@ -198,11 +200,11 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     });
   } else {
     inner.style.transform = 'rotateY(180deg)';
-    reveal.style.transform = 'scale(1.5)';
+    reveal.style.transform = 'scale(2)';
   }
   await sleep(700 * Math.max(k, 0.3));
   // 技名の札
-  slab.append(el('b', 'dn-rarity', def.rarity), el('b', 'dn-name', def.name), el('b', 'dn-read', def.reading));
+  slab.append(el('b', 'dn-rarity', def.rarity), el('b', 'dn-name', def.name), el('b', 'dn-read', def.reading), el('b', 'dn-text', def.text));
   slab.classList.add('show');
   await sleep(Math.max(0, t.revealMs - 700) * k);
   root.classList.remove('shake', 'dim');

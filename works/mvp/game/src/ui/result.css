@@ -1,0 +1,62 @@
+/* ===== 勝負がついた画面 ===== */
+#result { z-index: 55; overflow: hidden; display: block; }
+#result[hidden] { display: none; }
+#result.win { background: #d4001a; }
+#result.lose { background: #0a0714; }
+.res-bg, .res-fx { position: absolute; inset: 0; pointer-events: none; }
+.res-slash { position: absolute; background: #05030f; }
+.res-slash.a { left: -10%; right: 25%; top: 64%; height: 70%; clip-path: polygon(0 18%, 100% 0, 92% 100%, 0 100%); }
+.res-slash.b { left: 40%; right: -10%; top: -8%; height: 34%; clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 78%); }
+#result.lose .res-slash { background: #1a0d28; }
+#result.lose .res-slash.a { background: #2a0a14; }
+.res-dots { position: absolute; inset: 0; background: radial-gradient(circle, rgba(5, 3, 15, 0.35) 1.6px, transparent 2.2px) 0 0 / 11px 11px; -webkit-mask-image: linear-gradient(160deg, #000, transparent 60%); mask-image: linear-gradient(160deg, #000, transparent 60%); }
+.res-rays { position: absolute; left: 50%; top: 36%; width: max(300vw, 300vh); height: max(300vw, 300vh); translate: -50% -50%; background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 226, 122, 0.55) 0 1.4deg, transparent 1.4deg 6deg); -webkit-mask: radial-gradient(circle, transparent max(10vw, 10vh), #000 max(45vw, 45vh)); mask: radial-gradient(circle, transparent max(10vw, 10vh), #000 max(45vw, 45vh)); animation: res-spin 24s linear infinite; }
+#result.lose .res-rays { background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(212, 0, 26, 0.35) 0 1.2deg, transparent 1.2deg 8deg); animation-duration: 60s; animation-direction: reverse; }
+@keyframes res-spin { to { transform: rotate(360deg); } }
+.res-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; animation: res-flash 900ms ease-out both; }
+#result.win .res-flash { background: radial-gradient(circle at 50% 36%, #fff 0, #ffd46a 40%, transparent 78%); }
+#result.lose .res-flash { background: radial-gradient(circle at 50% 36%, #ff2a3a 0, #7a0010 50%, transparent 85%); animation: res-flash-lose 1100ms ease-out both; }
+@keyframes res-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes res-flash-lose { 0%, 12% { opacity: 1; } 18% { opacity: 0.2; } 28% { opacity: 0.8; } 100% { opacity: 0; } }
+
+.res-word { position: absolute; left: 50%; top: 24%; transform: translateX(-50%) rotate(-5deg); display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 3; }
+.res-big { display: block; font-size: clamp(46px, 16vw, 104px); font-weight: 900; font-style: italic; letter-spacing: 0.04em; white-space: nowrap; color: #fff; -webkit-text-stroke: 0.16em #05030f; paint-order: stroke fill; text-shadow: 0.07em 0.07em 0 #05030f; animation: res-slam 700ms cubic-bezier(0.2, 1.6, 0.4, 1) 120ms both; }
+#result.win .res-big { color: #ffe27a; text-shadow: 0.07em 0.07em 0 #05030f, 0 0 0.5em #fff7c0; }
+#result.lose .res-big { color: #d8d0e8; animation: res-drop 900ms cubic-bezier(0.3, 0, 0.2, 1) 120ms both, res-tremble 120ms linear 1000ms 8; }
+.res-sub { display: block; padding: 2px 26px 4px; font-size: clamp(20px, 6vw, 34px); font-weight: 900; font-style: italic; background: #fff; color: #d4001a; transform: skewX(-12deg); box-shadow: 5px 5px 0 #05030f; animation: res-in 380ms cubic-bezier(0.2, 1.4, 0.4, 1) 560ms both; }
+#result.lose .res-sub { background: #05030f; color: #ff4a5a; box-shadow: 5px 5px 0 #7a0010; }
+@keyframes res-slam { from { opacity: 0; scale: 3.2; } to { opacity: 1; scale: 1; } }
+@keyframes res-drop { 0% { opacity: 0; translate: 0 -60vh; } 55% { opacity: 1; translate: 0 6px; } 70% { translate: 0 -14px; } 85% { translate: 0 3px; } 100% { opacity: 1; translate: 0 0; } }
+@keyframes res-tremble { 0%, 100% { translate: 0 0; } 25% { translate: 2px -1px; } 75% { translate: -2px 1px; } }
+.res-vs { position: absolute; left: 50%; top: 52%; transform: translateX(-50%) skewX(-12deg); padding: 2px 18px; background: #05030f; color: #fff; font-size: 14px; font-weight: 900; font-style: italic; white-space: nowrap; z-index: 3; opacity: 0; animation: res-in2 360ms ease-out 900ms both; }
+@keyframes res-in2 { from { opacity: 0; translate: -30px 0; } to { opacity: 1; translate: 0 0; } }
+.res-gold { position: absolute; left: 50%; top: 60%; transform: translateX(-50%) rotate(-3deg); display: flex; flex-direction: column; align-items: center; z-index: 3; opacity: 0; animation: res-in2 400ms ease-out 1000ms both; }
+.res-gain { display: block; padding: 0 22px 2px; font-size: clamp(34px, 11vw, 60px); font-weight: 900; font-style: italic; color: #ffd46a; background: #05030f; box-shadow: 5px 5px 0 #fff; transform: skewX(-10deg); }
+.res-total { margin-top: 8px; padding: 0 12px; background: #fff; color: #05030f; font-size: 13px; font-weight: 900; transform: skewX(-10deg); }
+.res-buttons { position: absolute; left: 0; right: 0; bottom: 7%; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 4; opacity: 0; animation: res-in2 400ms ease-out 1700ms both; }
+.res-btn { min-width: 240px; padding: 10px 20px; font-size: 20px; font-weight: 900; font-style: italic; letter-spacing: 0.12em; background: #05030f; color: #fff; border: none; border-radius: 0; box-shadow: 6px 6px 0 #fff; transform: skewX(-12deg); }
+.res-btn.primary { background: #fff; color: #d4001a; box-shadow: 7px 7px 0 #05030f; min-height: 60px; font-size: 24px; }
+#result.lose .res-btn.primary { background: #ff4a5a; color: #05030f; }
+#result.lose .res-btn { box-shadow: 6px 6px 0 #7a0010; }
+
+/* 勝ち: 紙吹雪と、広がる輪 */
+.res-confetti { position: absolute; top: -20px; left: var(--x); width: 10px; height: 16px; background: #ffd46a; border: 2px solid #05030f; animation: res-fall var(--s) ease-in var(--d) both; }
+.res-confetti:nth-child(3n) { background: #fff; }
+.res-confetti:nth-child(3n + 1) { background: #ff4fb8; }
+@keyframes res-fall { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(112vh) rotate(var(--r)) translateX(50px); } }
+.res-ring { position: absolute; left: 50%; top: 36%; width: 60px; height: 60px; border: 10px solid #ffd46a; border-radius: 50%; transform: translate(-50%, -50%); animation: res-ring 1100ms ease-out var(--d) both; }
+@keyframes res-ring { from { transform: translate(-50%, -50%) scale(0.3); opacity: 1; } to { transform: translate(-50%, -50%) scale(16); opacity: 0; } }
+
+/* 負け: ひび割れと、落ちる破片、画面の揺れ */
+#result.lose { animation: res-quake 900ms linear 1; }
+@keyframes res-quake { 0%, 100% { translate: 0 0; } 10% { translate: -12px 8px; } 20% { translate: 10px -10px; } 30% { translate: -8px -6px; } 40% { translate: 9px 7px; } 55% { translate: -5px 3px; } 70% { translate: 3px -3px; } }
+.res-cracks { position: absolute; inset: 0; width: 100%; height: 100%; }
+.res-crack { fill: none; stroke: #ff3a4a; stroke-width: 0.9; stroke-linejoin: miter; vector-effect: non-scaling-stroke; stroke-dasharray: 160; stroke-dashoffset: 160; filter: drop-shadow(0 0 4px #ff2a3a); animation: res-crack 500ms ease-out var(--d) both; }
+@keyframes res-crack { to { stroke-dashoffset: 0; } }
+.res-shard { position: absolute; top: -30px; left: var(--x); width: var(--w); height: calc(var(--w) * 1.4); background: linear-gradient(135deg, #3a2a5a, #12091f); border: 2px solid #ff3a4a; clip-path: polygon(50% 0, 100% 70%, 20% 100%, 0 30%); animation: res-shard var(--s) cubic-bezier(0.5, 0, 0.9, 0.6) var(--d) both; }
+@keyframes res-shard { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(112vh) rotate(420deg); } }
+@media (prefers-reduced-motion: reduce) { #result.lose, .res-rays, .res-big, .res-sub, .res-confetti, .res-ring, .res-shard, .res-crack, .res-flash { animation: none !important; } .res-vs, .res-gold, .res-buttons { animation: none; opacity: 1; } .res-crack { stroke-dashoffset: 0; } }
+
+/* 技を引く演出: 技の効果の説明の札 */
+.dn-text { max-width: min(88vw, 380px); padding: 5px 16px 6px; margin-top: 6px; font-size: 13px; font-weight: 800; font-style: normal; line-height: 1.45; white-space: normal !important; text-align: center; color: #fff; background: rgba(5, 3, 15, 0.92); border-left: 6px solid var(--rc, #fff); border-right: 6px solid var(--rc, #fff); transform: skewX(-8deg); animation: res-in2 360ms ease-out 260ms both; }
+.draw-name { bottom: 3%; }
