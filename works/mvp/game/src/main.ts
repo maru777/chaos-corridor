@@ -38,6 +38,7 @@ import { coverScreen, revealScreen } from './ui/curtain';
 import { playDraws } from './ui/draw';
 import { showResult } from './ui/result';
 import { fillEffect } from './ui/effecttext';
+import { attachTip } from './ui/tip';
 import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
 import { loadWallet, saveWallet } from './save';
@@ -238,6 +239,7 @@ function miniCard(id: AbilityId): HTMLSpanElement {
   s.style.background = `var(--c-${rarityClass(id)})`;
   s.style.color = '#05030f';
   s.title = abilityDef(id).name;
+  attachTip(s, id); // マウスを乗せると、説明が出る（使った技は、相手のものも見られる）
   s.innerHTML = abilityIconSvg(id); // アイコンは、コードで作った SVG（外部の入力ではない）
   return s;
 }

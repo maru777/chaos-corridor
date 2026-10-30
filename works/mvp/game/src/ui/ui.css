@@ -313,3 +313,12 @@
 .eff-label { color: #e8420e; font-weight: 900; }
 .dn-text .eff-label { color: #ff8a3d; }
 #hand-desc, .dn-text, .codex-text { white-space: normal; }
+
+/* 技の説明のふきだし（カードにマウスを乗せたとき） */
+#tip { position: fixed; z-index: 95; max-width: min(88vw, 360px); padding: 8px 12px; background: #fffbe8; color: var(--ink); border: 3px solid var(--ink2); border-radius: 10px; box-shadow: 4px 4px 0 var(--ink2); font-size: 13px; font-weight: 800; line-height: 1.5; pointer-events: none; }
+#tip[hidden] { display: none; }
+#tip .tip-head { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 900; }
+#tip .tip-head.uncommon { color: #1b9a52; }
+#tip .tip-head.rare { color: #1a63d8; }
+#tip .tip-head.epic { color: #8a3cf0; }
+#tip .tip-head.legendary { color: #d99500; }

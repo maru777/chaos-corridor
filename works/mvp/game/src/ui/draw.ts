@@ -6,6 +6,7 @@ import { playCardRainSfx, playDartSfx, playSfx, playWallSfx } from '../view/sfx'
 import { shout } from '../view/voice';
 import { drawTiming, planDraw } from './drawplan';
 import { fillEffect } from './effecttext';
+import { attachTip } from './tip';
 import { abilityIconSvg } from './icons';
 
 /**
@@ -208,15 +209,18 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   slab.append(el('b', 'dn-rarity', def.rarity), el('b', 'dn-name', def.name), el('b', 'dn-read', def.reading));
   const effect = el('b', 'dn-text');
   fillEffect(effect, def.text);
-  slab.append(effect);
+  slab.append(effect, el('b', 'dn-tap', '▶ タップで次へ'));
   slab.classList.add('show');
   await sleep(Math.max(0, t.revealMs - 700) * k);
   root.classList.remove('shake', 'dim');
-  await sleep(t.holdMs * k);
+  // 効果を読めるように、タップするまで、そのまま見せる（うっかり飛ばさないよう、少し待ってから、受けつける）
+  await sleep(500);
+  await new Promise<void>((resolve) => root.addEventListener('click', () => resolve(), { once: true }));
   // 引いたカードは、上に置きっぱなしにする（2 枚目を引くあいだも、残る）
   const parkedLayer = root.querySelector('.draw-parked') as HTMLElement;
   const card = faceCard(id);
   card.classList.add('dparked');
+  attachTip(card, id); // 上に置いたカードにも、マウスを乗せると、説明が出る
   card.style.left = `${nth === 1 ? 32 : 68}%`;
   parkedLayer.appendChild(card);
   if (!reduced()) {

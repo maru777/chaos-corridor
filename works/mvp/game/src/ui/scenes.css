@@ -128,3 +128,8 @@
 
 /* 効果の説明は、行ごとに改行する（効果・手番・条件） */
 .dn-text { white-space: pre-line !important; text-align: left; }
+
+/* 引いた直後の説明は、読めるように大きく。タップするまで、そのまま */
+.dn-text { font-size: 15px !important; line-height: 1.55; padding: 8px 18px 9px !important; max-width: min(92vw, 420px) !important; }
+.dn-tap { margin-top: 8px; padding: 2px 16px; font-size: 14px; letter-spacing: 0.12em; color: #fff; background: #d4001a; transform: skewX(-12deg); animation: op-blink 1.1s ease-in-out infinite; }
+.dparked { pointer-events: auto; cursor: help; }
