@@ -453,7 +453,9 @@ export class BoardView {
     // 盤が、画面の安全な範囲（上の表示と下の手札・ボタンを避けた所）いっぱいに収まるように、距離と位置を計算で決める
     const insets = this.insets?.();
     const safe = insets === undefined ? undefined : safeAreaFromInsets(this.camera.aspect, h, insets.top, insets.bottom);
-    const rig = cameraRig(this.camera.aspect, this.size, safe);
+    // 確認用: URL に ?top を付けると、ほぼ真上から見て、盤が正方形に見える（88 度。真上の 90 度は、向きが決まらないので避ける）
+    const pitch = new URLSearchParams(location.search).has('top') ? 88 : undefined;
+    const rig = cameraRig(this.camera.aspect, this.size, safe, pitch);
     const shiftPx = Math.round((rig.shiftNdc * h) / 2);
     if (shiftPx !== 0) this.camera.setViewOffset(w, h, 0, shiftPx, w, h);
     else this.camera.clearViewOffset();
