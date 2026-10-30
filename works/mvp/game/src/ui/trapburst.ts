@@ -9,7 +9,10 @@ import type { TrapKind } from '../types';
 /** 演出の長さ（ミリ秒）。CSS の animation と同じにする */
 export const TRAP_BURST_MS = 1500;
 
-const KIND_CHAR: Readonly<Record<TrapKind, string>> = { stun: '休', back: '戻', shove: '飛', confiscate: '奪', seal: '封' };
+/** 見えない壁にぶつかったときも、罠と同じ演出を出す（kind は 'ghost'） */
+export type BurstKind = TrapKind | 'ghost';
+
+const KIND_CHAR: Readonly<Record<BurstKind, string>> = { stun: '休', back: '戻', shove: '飛', confiscate: '奪', seal: '封', ghost: '壁' };
 
 /** 画面の幅の中で、中心の x が収まる範囲に寄せる */
 export function clampBurstX(x: number, width: number): number {
@@ -24,7 +27,7 @@ function part(tag: 'div' | 'b' | 'small' | 'span' | 'i', cls: string, text?: str
   return e;
 }
 
-export function showTrapBurst(root: HTMLElement, x: number, y: number, kind: TrapKind, detail: string): void {
+export function showTrapBurst(root: HTMLElement, x: number, y: number, kind: BurstKind, detail: string): void {
   const el = part('div', `trap-burst ${kind}`);
   const ring = part('i', 'tb-ring');
   ring.style.left = `${x}px`;

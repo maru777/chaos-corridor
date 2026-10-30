@@ -733,6 +733,14 @@ function trapBurst(t: Trap): void {
   showTrapBurst(el('pops'), p.x, p.y, t.kind, TRAP_TEXT[t.kind].replace('罠だ！ ', ''));
 }
 
+/** 見えない壁が姿を現したときの「トラップ発動！」。壁の位置の上に出す */
+function ghostBurst(w: WallSpec): void {
+  const c = wallToWorld(state.size, w.x, w.y);
+  const p = view.project(c.x, c.z);
+  playTrapSfx();
+  showTrapBurst(el('pops'), p.x, p.y, 'ghost', '見えない壁にぶつかった！ この手番は無駄');
+}
+
 /** 罠を踏んだ・見えない壁にぶつかった・相手が休みになったことを、言葉で知らせる */
 function notifyTrap(before: GameState, after: GameState, mover: PlayerId, withBurst = true): void {
   const stepped = steppedTrap(before, after);
@@ -740,7 +748,12 @@ function notifyTrap(before: GameState, after: GameState, mover: PlayerId, withBu
     say(TRAP_TEXT[stepped.kind]);
     if (withBurst) trapBurst(stepped);
   }
-  else if (after.pawns[mover].x === before.pawns[mover].x && after.pawns[mover].y === before.pawns[mover].y && after.turn !== mover) say('見えない壁にぶつかった！');
+  else if (after.pawns[mover].x === before.pawns[mover].x && after.pawns[mover].y === before.pawns[mover].y && after.turn !== mover) {
+    say('見えない壁にぶつかった！ この手番は無駄になった');
+    // 見えない壁に、ぶつかった: 姿を現した壁の位置で、「トラップ発動！」
+    const found = after.walls.find((w) => w.ghost !== true && before.walls.some((b) => b.ghost === true && b.x === w.x && b.y === w.y && b.o === w.o));
+    if (found && withBurst) ghostBurst(found);
+  }
   else if (after.winner === null && after.turn === mover && before.turn === mover) say('相手は休み。続けて動ける');
 }
 
