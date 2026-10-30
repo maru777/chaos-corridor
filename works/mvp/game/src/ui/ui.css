@@ -322,3 +322,6 @@
 #tip .tip-head.rare { color: #1a63d8; }
 #tip .tip-head.epic { color: #8a3cf0; }
 #tip .tip-head.legendary { color: #d99500; }
+
+/* デバッグパネルは、低い画面でも、中でスクロールできる */
+#debug-panel { max-height: calc(100vh - 60px); overflow-y: auto; }
