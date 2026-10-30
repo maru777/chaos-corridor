@@ -110,8 +110,19 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   });
   await sleep(t.rainMs * k);
 
-  // 2. ダーツが飛んで、1 枚に刺さる
-  const target = cards[plan.hit] as HTMLElement;
+  // 2. 好きなカードをタップする（結果は、どれを選んでも、種で先に決まっている）。ダーツが飛んで、そのカードに刺さる
+  const prompt = root.querySelector('.draw-prompt') as HTMLElement;
+  prompt.textContent = '好きなカードをタップ！';
+  prompt.classList.add('show');
+  const picked = await new Promise<number>((resolve) => {
+    cards.forEach((c, i) => {
+      c.classList.add('pickable');
+      c.addEventListener('click', () => resolve(i), { once: true });
+    });
+  });
+  prompt.classList.remove('show');
+  for (const c of cards) c.classList.remove('pickable');
+  const target = cards[picked] as HTMLElement;
   const fr = root.getBoundingClientRect();
   const tr = target.getBoundingClientRect();
   const cx = tr.left + tr.width / 2 - fr.left;
@@ -188,6 +199,18 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   await sleep(Math.max(0, t.revealMs - 700) * k);
   root.classList.remove('shake', 'dim');
   await sleep(t.holdMs * k);
+  // 引いたカードは、上に置きっぱなしにする（2 枚目を引くあいだも、残る）
+  const parkedLayer = root.querySelector('.draw-parked') as HTMLElement;
+  const card = faceCard(id);
+  card.classList.add('dparked');
+  card.style.left = `${nth === 1 ? 32 : 68}%`;
+  parkedLayer.appendChild(card);
+  if (!reduced()) {
+    const r = card.getBoundingClientRect();
+    const mx = fr.left + fr.width / 2 - (r.left + r.width / 2);
+    const my = fr.top + fr.height * 0.44 - (r.top + r.height / 2);
+    card.animate([{ transform: `translate(${mx}px, ${my}px) scale(3.2)` }, { transform: 'translate(0, 0) scale(1)' }], { duration: 420, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.1)' });
+  }
   reveal.classList.add('out');
   slab.classList.remove('show');
   fx.replaceChildren();
@@ -203,12 +226,27 @@ export async function playDraws(ids: readonly AbilityId[], seed: number, beforeS
   if (root === null) return () => undefined;
   const bg = el('div', 'toss-bg');
   bg.append(el('i', 'toss-slash s1'), el('i', 'toss-slash s2'), el('i', 'toss-dots'));
-  root.replaceChildren(bg, el('div', 'draw-title'), el('div', 'draw-field'), el('div', 'draw-fx'), el('div', 'draw-name'), el('div', 'draw-note'));
+  root.replaceChildren(
+    bg,
+    el('div', 'draw-title'),
+    el('div', 'draw-field'),
+    el('div', 'draw-parked'),
+    el('div', 'draw-fx'),
+    el('div', 'draw-name'),
+    el('div', 'draw-prompt'),
+    el('div', 'draw-note'),
+  );
   root.hidden = false;
   root.classList.remove('enter');
   await beforeStart();
   root.classList.add('enter');
   for (const [i, id] of ids.entries()) await drawOne(root, id, i + 1, ids.length, (seed + i * 7919) >>> 0);
+  // 引いた技を、確かめてから、タップで進む
+  const prompt = root.querySelector('.draw-prompt') as HTMLElement;
+  prompt.textContent = 'タップで進む';
+  prompt.classList.add('show');
+  await new Promise<void>((resolve) => root.addEventListener('click', () => resolve(), { once: true }));
+  prompt.classList.remove('show');
   if (note !== undefined) {
     (root.querySelector('.draw-field') as HTMLElement).replaceChildren();
     (root.querySelector('.draw-title') as HTMLElement).textContent = '';

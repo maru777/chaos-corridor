@@ -31,10 +31,10 @@ export interface DrawTiming {
 }
 
 const TIMING: Readonly<Record<Rarity, DrawTiming>> = {
-  UNCOMMON: { rainMs: 900, dartMs: 450, buildMs: 0, revealMs: 1000, holdMs: 500 },
-  RARE: { rainMs: 900, dartMs: 450, buildMs: 300, revealMs: 1500, holdMs: 600 },
-  EPIC: { rainMs: 1000, dartMs: 500, buildMs: 800, revealMs: 2300, holdMs: 700 },
-  LEGENDARY: { rainMs: 1100, dartMs: 550, buildMs: 1600, revealMs: 3800, holdMs: 900 },
+  UNCOMMON: { rainMs: 1700, dartMs: 450, buildMs: 0, revealMs: 1000, holdMs: 500 },
+  RARE: { rainMs: 1700, dartMs: 450, buildMs: 300, revealMs: 1500, holdMs: 600 },
+  EPIC: { rainMs: 1700, dartMs: 500, buildMs: 800, revealMs: 2300, holdMs: 700 },
+  LEGENDARY: { rainMs: 1700, dartMs: 550, buildMs: 1600, revealMs: 3800, holdMs: 900 },
 };
 
 export function drawTiming(rarity: Rarity): DrawTiming {
@@ -47,22 +47,21 @@ export function drawTotalMs(rarity: Rarity): number {
   return t.rainMs + t.dartMs + t.buildMs + t.revealMs + t.holdMs;
 }
 
-export const RAIN_COUNT = 12;
+export const RAIN_COUNT = 40;
 
 export interface DrawPlan {
   readonly cards: readonly RainCard[];
-  /** ダーツが刺さるカード（cards の番号） */
-  readonly hit: number;
   readonly timing: DrawTiming;
 }
 
 /**
- * 場を 4 列 × 3 行に分け、各マスに 1 枚ずつ、少しずらして散らす。ダーツの的は、真ん中の列あたりから選ぶ（めくる動きが見やすい）。
+ * 場を 8 列 × 5 行に分け、各マスに 1 枚ずつ、少しずらして散らす（大量に降ってくる）。
+ * どのカードを選ぶかは、ユーザーが決める。結果は、どれを選んでも、種で先に決まったものになる。
  * rng は 0 以上 1 未満の乱数（種つきのものを渡すと、毎回同じ計画になる）
  */
 export function planDraw(rarity: Rarity, rng: () => number): DrawPlan {
-  const cols = 4;
-  const rows = 3;
+  const cols = 8;
+  const rows = 5;
   const cells: { c: number; r: number }[] = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ c, r });
   // 並べ替え（降る順番がばらばらになる）
@@ -71,14 +70,11 @@ export function planDraw(rarity: Rarity, rng: () => number): DrawPlan {
     [cells[i], cells[j]] = [cells[j] as { c: number; r: number }, cells[i] as { c: number; r: number }];
   }
   const cards = cells.map((cell, i): RainCard => ({
-    x: 14 + (cell.c + 0.5) * (72 / cols) + (rng() - 0.5) * 6,
-    y: 26 + (cell.r + 0.5) * (46 / rows) + (rng() - 0.5) * 5,
-    rot: Math.round((rng() - 0.5) * 50),
-    delay: Math.round(i * 55 + rng() * 40),
-    fall: Math.round(420 + rng() * 160),
+    x: 9 + (cell.c + 0.5) * (82 / cols) + (rng() - 0.5) * 5,
+    y: 24 + (cell.r + 0.5) * (62 / rows) + (rng() - 0.5) * 5,
+    rot: Math.round((rng() - 0.5) * 60),
+    delay: Math.round(i * 28 + rng() * 40),
+    fall: Math.round(420 + rng() * 200),
   }));
-  const middle = cards.map((c, i) => ({ c, i })).filter(({ c }) => c.x > 30 && c.x < 70);
-  const pool = middle.length > 0 ? middle : cards.map((c, i) => ({ c, i }));
-  const hit = (pool[Math.floor(rng() * pool.length)] as { i: number }).i;
-  return { cards, hit, timing: TIMING[rarity] };
+  return { cards, timing: TIMING[rarity] };
 }

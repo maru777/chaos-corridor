@@ -4,29 +4,19 @@ import { createRng } from '../src/rng';
 import { RAIN_COUNT, drawTiming, drawTotalMs, planDraw } from '../src/ui/drawplan';
 
 describe('技を引く演出の計画', () => {
-  it('カードの数は決まった数で、位置は場の中に収まる', () => {
+  it('カードは大量にあり、位置は場の中に収まる', () => {
     for (let seed = 1; seed <= 50; seed++) {
       const p = planDraw('RARE', createRng(seed));
       expect(p.cards.length).toBe(RAIN_COUNT);
+      expect(RAIN_COUNT).toBeGreaterThanOrEqual(30);
       for (const c of p.cards) {
-        expect(c.x).toBeGreaterThan(8);
-        expect(c.x).toBeLessThan(92);
+        expect(c.x).toBeGreaterThan(6);
+        expect(c.x).toBeLessThan(94);
         expect(c.y).toBeGreaterThan(20);
-        expect(c.y).toBeLessThan(80);
+        expect(c.y).toBeLessThan(90);
         expect(c.delay).toBeGreaterThanOrEqual(0);
         expect(c.fall).toBeGreaterThan(0);
       }
-    }
-  });
-
-  it('ダーツの的は、カードの中の 1 枚で、真ん中あたりにある', () => {
-    for (let seed = 1; seed <= 50; seed++) {
-      const p = planDraw('EPIC', createRng(seed));
-      expect(p.hit).toBeGreaterThanOrEqual(0);
-      expect(p.hit).toBeLessThan(p.cards.length);
-      const x = (p.cards[p.hit] as { x: number }).x;
-      expect(x).toBeGreaterThan(30);
-      expect(x).toBeLessThan(70);
     }
   });
 
