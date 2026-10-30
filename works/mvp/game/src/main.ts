@@ -24,7 +24,7 @@ import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld } from './view/layout';
 import { showPop } from './view/popsfx';
-import { playMoveSfx, playSfx, playTitleSfx, playWallSfx } from './view/sfx';
+import { playMoveSfx, playSfx, playUiSfx, playTitleSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 import './ui/ui.css';
 import './ui/scenes.css';
@@ -32,6 +32,7 @@ import './ui/persona.css';
 import './ui/shop.css';
 import './ui/result.css';
 import './ui/pcard.css';
+import './ui/log.css';
 import { visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
@@ -43,7 +44,10 @@ import { fillEffect } from './ui/effecttext';
 import { attachTip } from './ui/tip';
 import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
-import { loadWallet, saveWallet } from './save';
+import { loadLog, loadWallet, saveLog, saveWallet } from './save';
+import { addEntry } from './matchlog';
+import type { MatchEntry } from './matchlog';
+import { renderLog } from './ui/log';
 import { currentSkin, earn, goldFor } from './shop';
 import type { Wallet } from './shop';
 
@@ -102,6 +106,10 @@ let cpuReadyAt = 0;
 
 /** Gold と持ち物（この端末のブラウザに保存） */
 let wallet: Wallet = loadWallet();
+/** 勝敗ログ（この端末のブラウザに保存） */
+let matchLog: MatchEntry[] = loadLog();
+/** デバッグで勝敗をつけたときは、戦績に残さない */
+let debugForcedResult = false;
 /** この対局の Gold を、もう受け取ったか */
 let awarded = false;
 
@@ -490,6 +498,10 @@ function refresh(): void {
     const g = goldFor(cpuLevel, state.winner === seatA);
     wallet = earn(wallet, g);
     saveWallet(wallet);
+    if (!debugForcedResult) {
+      matchLog = addEntry(matchLog, { at: new Date().toISOString(), level: cpuLevel, won: state.winner === seatA, first: seatA === 0, moves: log.length, gold: g });
+      saveLog(matchLog);
+    }
     const won = state.winner === seatA;
     const foe = `CPU ${levelStars(cpuLevel)} ${LEVEL_NAMES[cpuLevel - 1] ?? ''}`;
     // 最後の一手の演出が落ち着いてから、結果の画面を出す
@@ -678,6 +690,7 @@ async function startMatch(choice: MatchChoice, closeMenu: () => void = () => und
   mode = 'move';
   armedAbility = null;
   awarded = false;
+  debugForcedResult = false;
   lastInsets = null;
   lastTurn = state.turn;
   const first = tossFirst(seed);
@@ -735,6 +748,7 @@ function debugEffect(rarity: Rarity): void {
 function forceWinner(iWin: boolean): void {
   const mine: PlayerId = cpuSeat === null ? 0 : seatA;
   const other: PlayerId = mine === 0 ? 1 : 0;
+  debugForcedResult = true;
   state = { ...state, winner: iWin ? mine : other };
   refresh();
 }
@@ -885,6 +899,7 @@ function renderShopUi(): void {
 
 const shell = createShell({
   renderShop: renderShopUi,
+  renderLog: () => renderLog(el('log-body'), matchLog),
   skipOpening: params.has('skip') || params.has('debug'),
   onSlam: playTitleSfx,
   onStart: (choice, closeMenu) => {
@@ -915,5 +930,14 @@ function cpuTick(): void {
   play(chooseAction(state, cpuLevel, createRng((seed + log.length * 7919) >>> 0)));
 }
 window.setInterval(cpuTick, 150);
+
+// ボタンの効果音: とじる・戻る = 下がる音、決定・開始（目立つボタン）= 上がる 2 音、ほかは短いピッ（押せないボタンは鳴らさない）
+document.addEventListener('click', (e) => {
+  const b = (e.target as Element | null)?.closest('button');
+  if (!b || b.disabled) return;
+  if (b.id.endsWith('-close')) playUiSfx('back');
+  else if (b.classList.contains('primary') || b.classList.contains('level-btn') || b.classList.contains('res-btn')) playUiSfx('confirm');
+  else playUiSfx('tap');
+});
 
 refresh();

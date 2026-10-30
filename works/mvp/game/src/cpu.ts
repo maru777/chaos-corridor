@@ -23,7 +23,7 @@ export interface LevelSpec {
 
 /** ★1〜★5。1 手先だけを見る段階（以前の Lv1〜5）は、弱すぎて意味がないので、なくした */
 const LEVELS: readonly LevelSpec[] = [
-  { depth: 2, beam: 8, slip: 0.1, timeMs: 1500 }, // ★1: 2 手読み。ときどきうっかり
+  { depth: 2, beam: 6, slip: 0, timeMs: 1500 }, // ★1: 2 手読み（候補を絞る）
   { depth: 2, beam: 12, slip: 0, timeMs: 1500 }, // ★2: 2 手読み
   { depth: 3, beam: 8, slip: 0, timeMs: 2500 }, // ★3: 3 手読み
   { depth: 3, beam: 12, slip: 0, timeMs: 3000 }, // ★4: 3 手読み（候補を広く）

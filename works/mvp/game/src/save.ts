@@ -1,3 +1,5 @@
+import { parseLog } from './matchlog';
+import type { MatchEntry } from './matchlog';
 import { START_WALLET, parseWallet } from './shop';
 import type { Wallet } from './shop';
 
@@ -21,6 +23,26 @@ export function loadWallet(): Wallet {
 export function saveWallet(w: Wallet): boolean {
   try {
     window.localStorage.setItem(KEY, JSON.stringify(w));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const LOG_KEY = 'chaos-corridor.log.v1';
+
+export function loadLog(): MatchEntry[] {
+  try {
+    const raw = window.localStorage.getItem(LOG_KEY);
+    return raw === null ? [] : parseLog(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+export function saveLog(list: readonly MatchEntry[]): boolean {
+  try {
+    window.localStorage.setItem(LOG_KEY, JSON.stringify(list));
     return true;
   } catch {
     return false;

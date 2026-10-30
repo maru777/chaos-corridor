@@ -313,6 +313,31 @@ export function playLoseSfx(): void {
   [NOTE.G5, NOTE.E5 * 0.944, NOTE.C5].forEach((f, i) => tone(c, master, 'triangle', f, f * 0.8, t + 0.7 + i * 0.35, 1.0, 0.22));
 }
 
+/**
+ * メニュー・ボタンの効果音（短く、軽く）。
+ * - tap: ふつうのボタン（ピッ）  - confirm: 決定・開始（ピロッ、2 音で上がる）  - back: とじる・戻る（ポッ、下がる）
+ */
+export type UiSfxKind = 'tap' | 'confirm' | 'back';
+
+export function playUiSfx(kind: UiSfxKind): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.2;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.003;
+  if (kind === 'tap') {
+    tone(c, master, 'triangle', 1100, 1700, t, 0.07, 0.8);
+    whoosh(c, master, 3000, 1200, t, 0.03, 0.25);
+  } else if (kind === 'confirm') {
+    tone(c, master, 'triangle', 880, 880, t, 0.09, 0.7);
+    tone(c, master, 'triangle', 1320, 1320, t + 0.07, 0.16, 0.8);
+    tone(c, master, 'sine', 90, 60, t, 0.1, 0.6);
+  } else {
+    tone(c, master, 'triangle', 900, 520, t, 0.1, 0.7);
+  }
+}
+
 /** タイトルのロゴが「ドン!!」と落ちる音: 風を切る音 → 重い衝撃 → 長い和音ときらめき */
 export function playTitleSfx(): void {
   const c = getContext();

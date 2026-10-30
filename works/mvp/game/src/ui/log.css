@@ -1,0 +1,22 @@
+/* 戦績（赤と黒の漫画） */
+.log-empty { padding: 20px 8px; font-weight: 800; color: #444; }
+.log-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.log-chip { display: flex; flex-direction: column; align-items: center; padding: 6px 4px 8px; background: #fff; border: 3px solid #05030f; box-shadow: 3px 3px 0 #05030f; transform: skewX(-4deg); }
+.log-chip small { font-size: 11px; font-weight: 800; color: #555; }
+.log-chip b { font-size: 24px; font-weight: 900; font-style: italic; color: #d4001a; line-height: 1.1; }
+.log-levels { display: flex; flex-direction: column; gap: 4px; }
+.log-level { display: flex; align-items: center; gap: 10px; padding: 4px 10px; background: #fff; border: 2px solid #05030f; }
+.log-level .log-stars { color: #b36b00; letter-spacing: 0.08em; }
+.log-level .log-name { flex: 1; font-size: 12px; color: #555; }
+.log-level small { min-width: 44px; text-align: right; font-weight: 900; }
+.log-list { display: flex; flex-direction: column; gap: 4px; }
+.log-row { display: flex; align-items: center; gap: 10px; padding: 4px 10px; background: #fff; border-left: 8px solid #d4001a; border-top: 2px solid #05030f; border-right: 2px solid #05030f; border-bottom: 2px solid #05030f; }
+.log-row.lost { border-left-color: #05030f; background: #ececf2; }
+.log-result { width: 26px; font-size: 20px; font-weight: 900; font-style: italic; color: #d4001a; }
+.log-row.lost .log-result { color: #05030f; }
+.log-vs { flex: 1; font-size: 13px; font-weight: 800; }
+.log-moves, .log-date { font-size: 11px; color: #666; }
+.log-gold { font-weight: 900; color: #b36b00; }
+
+.log-vs { white-space: nowrap; font-size: 12px; }
+.log-moves { white-space: nowrap; }
