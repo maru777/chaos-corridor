@@ -24,11 +24,13 @@ const SPIN_MS = 2300;
 export function showToss(view: TossView): Promise<void> {
   const root = document.getElementById('toss');
   const coin = document.getElementById('coin');
+  const lift = coin?.parentElement;
+  const shadow = document.querySelector('.coin-shadow');
   const faceA = document.getElementById('coin-a');
   const faceB = document.getElementById('coin-b');
   const result = document.getElementById('toss-result');
   const hint = document.getElementById('toss-hint');
-  if (!root || !coin || !faceA || !faceB || !result || !hint) return Promise.resolve();
+  if (!root || !coin || !lift || !shadow || !faceA || !faceB || !result || !hint) return Promise.resolve();
   faceA.textContent = view.a;
   faceB.textContent = view.b;
   result.textContent = '';
@@ -38,11 +40,12 @@ export function showToss(view: TossView): Promise<void> {
   // 表（A）が上で止まるなら 0 度、裏（B）なら 180 度。その前に、何度か回る
   const end = 360 * 5 + (view.first === 0 ? 0 : 180);
   coin.style.setProperty('--end', `${reduce ? (view.first === 0 ? 0 : 180) : end}deg`);
-  coin.style.setProperty('--spin', `${reduce ? 0 : SPIN_MS}ms`);
-  coin.classList.remove('spin');
+  root.style.setProperty('--spin', `${reduce ? 0 : SPIN_MS}ms`);
+  const parts = [coin, lift, shadow];
+  for (const e of parts) e.classList.remove('spin');
   root.hidden = false;
   void coin.offsetWidth; // 回転のやり直しのため、再描画させる
-  coin.classList.add('spin');
+  for (const e of parts) e.classList.add('spin');
 
   return new Promise<void>((resolve) => {
     let done = false;
