@@ -293,10 +293,10 @@
 #levels-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .level-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; min-height: 64px; }
 .level-btn strong { font-size: 30px; font-weight: 900; font-style: italic; letter-spacing: 0.14em; color: #05030f; -webkit-text-stroke: 0; }
-.level-stars { display: flex; gap: 5px; line-height: 1; }
-.star { font-style: normal; font-size: 28px; color: rgba(5, 3, 15, 0.12); -webkit-text-stroke: 2px #05030f; paint-order: stroke fill; }
-.star.on { color: #ffd23f; filter: drop-shadow(2px 2px 0 #05030f); }
-.level-btn[data-level="5"] .star.on { color: #d4001a; filter: drop-shadow(2px 2px 0 #05030f) drop-shadow(0 0 6px #fff2a8); }
+.level-stars { display: flex; gap: 3px; line-height: 1; }
+.star { font-style: normal; font-size: 17px; color: rgba(5, 3, 15, 0.12); -webkit-text-stroke: 1.5px #05030f; paint-order: stroke fill; }
+.star.on { color: #ffd23f; filter: drop-shadow(1px 1px 0 #05030f); }
+.level-btn[data-level="5"] .star.on { color: #d4001a; filter: drop-shadow(1px 1px 0 #05030f) drop-shadow(0 0 4px #fff2a8); }
 .level-btn[data-level="1"] { background: #b9f1c9; }
 .level-btn[data-level="2"] { background: #8fe3ff; }
 .level-btn[data-level="3"] { background: #d3b8ff; }
