@@ -40,7 +40,7 @@ export function menuItems(started: boolean): MenuItem[] {
     ...(started ? ([{ id: 'resume', label: 'つづける', primary: true }] as const) : []),
     { id: 'cpu', label: started ? 'CPU と新しく対戦' : 'CPU と対戦', primary: !started },
     { id: 'shop', label: 'ショップ', primary: false },
-    { id: 'codex', label: '技一覧', primary: false },
+    { id: 'codex', label: 'Skill 一覧', primary: false },
     { id: 'rules', label: 'あそびかた', primary: false },
     ...(started ? ([{ id: 'restart', label: '同じ相手で、やりなおす', primary: false }] as const) : []),
   ];

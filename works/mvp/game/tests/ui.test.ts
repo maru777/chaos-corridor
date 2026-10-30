@@ -120,7 +120,7 @@ describe('あそびかた', () => {
       expect(s.title.length).toBeGreaterThan(0);
       expect(s.lines.length).toBeGreaterThan(0);
     }
-    expect(RULES.some((s) => s.title.includes('手札'))).toBe(true);
+    expect(RULES.some((s) => s.title.includes('Skill'))).toBe(true);
   });
 });
 

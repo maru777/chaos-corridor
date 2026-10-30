@@ -99,7 +99,7 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '氷刻の静止',
     reading: 'Frozen Time',
     rarity: 'EPIC',
-    text: '効果：相手を 1 手番休ませる。\n手番：技そのものは手番を使わず、続けて自分がもう一度動ける。\n制約：いつでも使える。',
+    text: '効果：相手を 1 手番休ませる。\n手番：Skill そのものは手番を使わず、続けて自分がもう一度動ける。\n制約：いつでも使える。',
   },
   {
     id: 'triwall',

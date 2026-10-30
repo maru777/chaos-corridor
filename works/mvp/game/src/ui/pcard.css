@@ -1,0 +1,29 @@
+/* ===== 対戦中の、プレイヤーカード（上）: 大きく・読みやすく ===== */
+.pcard { gap: 4px; padding: 8px 12px 9px; min-width: 156px; font-size: 13px; }
+.pcard .pname { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.pcard .pseat { font-size: 20px; font-weight: 900; font-style: italic; letter-spacing: 0.06em; line-height: 1; }
+.pcard .pwho { margin-left: 0; font-size: 11px; padding: 1px 8px; }
+.pcard .prow { gap: 7px; min-height: 26px; flex-wrap: wrap; }
+.pcard .pchip { padding: 0 8px; border-radius: 3px; background: var(--ink2); color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 0.12em; line-height: 16px; transform: skewX(-10deg); }
+/* WALL: 残りの数を大きく。残りが少ないと、赤くなる */
+.pcard .pnum { font-size: 28px; font-weight: 900; font-style: italic; line-height: 1; color: var(--ink2); }
+.pcard .pnum.low { color: #d4001a; }
+.pcard .pmax { margin-left: -4px; font-size: 12px; font-weight: 800; color: #666; }
+.pcard .tag { padding: 1px 8px; font-size: 11px; font-weight: 900; }
+.pcard .tag.warn { background: #ff6a6a; color: #fff; }
+.pcard .pips { display: flex; gap: 3px; margin: 0 0 2px; }
+.pcard .pip { flex: 1 1 0; width: auto; height: 8px; border-radius: 2px; }
+/* SKILL: カードを大きく。使ったカードは表向き、まだは裏向き。右に、残り / 配られた数 */
+.pcard .pcards { display: flex; gap: 5px; align-items: center; }
+.pcard .mini-back { width: 22px; height: 30px; border-radius: 4px; }
+.pcard .mini-card { width: 28px; height: 34px; border-radius: 4px; }
+.pcard .mini-card svg { width: 22px; height: 22px; }
+.pcard .pcount { margin-left: auto; font-size: 15px; font-weight: 900; font-style: italic; }
+@media (max-width: 520px) {
+  .pcard { min-width: 0; padding: 7px 8px 8px; }
+  .pcard .pseat { font-size: 17px; }
+  .pcard .pnum { font-size: 24px; }
+  .pcard .mini-back { width: 19px; height: 26px; }
+  .pcard .mini-card { width: 24px; height: 30px; }
+  .pcard .mini-card svg { width: 19px; height: 19px; }
+}

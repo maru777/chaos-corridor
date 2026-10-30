@@ -106,7 +106,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   slab.classList.remove('show');
   root.dataset['rarity'] = rarity.toLowerCase();
   root.classList.remove('dim', 'shake', 'build');
-  title.textContent = `技を引く　${nth} / ${total}`;
+  title.textContent = `Skill を引く　${nth} / ${total}`;
 
   // 1. 裏向きのカードが降ってくる
   const cards: HTMLElement[] = plan.cards.map((c) => {

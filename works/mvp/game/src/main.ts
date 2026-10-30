@@ -31,6 +31,7 @@ import './ui/scenes.css';
 import './ui/persona.css';
 import './ui/shop.css';
 import './ui/result.css';
+import './ui/pcard.css';
 import { visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
@@ -266,7 +267,7 @@ function renderHand(): void {
     for (const p of [0, 1] as const) {
       const cards = visibleCards(state, p, false);
       if (cards === null || cards.length === 0) continue;
-      const row = div('result-hand', `${NAMES[p]}の残りの手札`);
+      const row = div('result-hand', `${NAMES[p]}の残り Skill`);
       for (const id of cards) row.appendChild(miniCard(id));
       abilitiesEl.appendChild(row);
     }
@@ -342,45 +343,57 @@ function renderHand(): void {
   }
 }
 
-/** 上の、プレイヤーカード: 名前・壁の残り（目盛り）・短い壁・壁封じ・手札の枚数（裏向き）。手番の人を目立たせる */
+/**
+ * 上の、プレイヤーカード: 席（先手・後手）と相手の名前、WALL（残りの数を大きく、目盛りつき。短い壁・壁封じのしるし）、
+ * SKILL（使った Skill は表向き、まだは裏向き。残り / 配られた数）。手番の人を目立たせる。
+ */
 function renderPlayerCards(): void {
   for (const p of [0, 1] as const) {
     const card = pcardEls[p];
     card.replaceChildren();
     card.classList.toggle('active', state.winner === null ? state.turn === p : state.winner === p);
-    const nameRow = div('pname', NAMES[p]);
-    nameRow.appendChild(div('pwho', seatLabel(p)));
+    const nameRow = div('pname');
+    nameRow.append(div('pseat', NAMES[p]), div('pwho', seatLabel(p)));
     card.appendChild(nameRow);
-    const walls = div('prow');
-    walls.append(document.createTextNode('壁'));
-    const pips = div('pips');
-    for (let i = 0; i < WALLS_PER_PLAYER; i++) {
-      const pip = document.createElement('span');
-      pip.className = i < state.wallsLeft[p] ? 'pip' : 'pip off';
-      pips.appendChild(pip);
-    }
-    walls.appendChild(pips);
-    if (state.shortWalls[p] > 0) walls.appendChild(div('tag', `短 ${state.shortWalls[p]}`));
-    if (state.wallBlocked[p]) walls.appendChild(div('tag', '壁封じ'));
-    card.appendChild(walls);
-    const hand = div('prow');
-    hand.append(document.createTextNode('手札'));
-    // 相手の手札は、枚数だけ（デバッグのときだけ、中身も）
-    // 使った技は、表向きで見える（相手が使ったカードも）。使うまでは、裏向き
+
+    // WALL: 残りの数を大きく。短い壁・壁封じは、右にしるし。下に、10 目盛りのゲージ
+    const wallRow = div('prow');
+    const left = state.wallsLeft[p];
+    const num = document.createElement('b');
+    num.className = `pnum${left <= 2 ? ' low' : ''}`;
+    num.textContent = String(left);
+    const max = document.createElement('small');
+    max.className = 'pmax';
+    max.textContent = `/${WALLS_PER_PLAYER}`;
+    wallRow.append(div('pchip', 'WALL'), num, max);
+    if (state.shortWalls[p] > 0) wallRow.appendChild(div('tag', `短壁 ${state.shortWalls[p]}`));
+    if (state.wallBlocked[p]) wallRow.appendChild(div('tag warn', '壁封じ'));
+    card.appendChild(wallRow);
+    const gauge = div('pips');
+    for (let i = 0; i < WALLS_PER_PLAYER; i++) gauge.appendChild(div(i < left ? 'pip' : 'pip off'));
+    card.appendChild(gauge);
+
+    // SKILL: 使った Skill は、表向き（相手のも）。まだ使っていないものは、裏向き
+    const skills = div('prow');
     const dealt = newGame(seed).abilities[p];
     const rest = [...state.abilities[p]];
+    const cards = div('pcards');
     for (const id of dealt) {
       const at = rest.indexOf(id);
       if (at >= 0) {
         rest.splice(at, 1);
-        hand.appendChild(debugShowAll ? miniCard(id) : div('mini-back'));
+        cards.appendChild(debugShowAll ? miniCard(id) : div('mini-back'));
       } else {
         const used = miniCard(id);
         used.classList.add('used');
-        hand.appendChild(used);
+        cards.appendChild(used);
       }
     }
-    card.appendChild(hand);
+    const remain = document.createElement('b');
+    remain.className = 'pcount';
+    remain.textContent = `${state.abilities[p].length}/${dealt.length}`;
+    skills.append(div('pchip', 'SKILL'), cards, remain);
+    card.appendChild(skills);
   }
 }
 
@@ -736,7 +749,7 @@ function debugFoeSkill(): void {
   const asFoe: GameState = { ...state, turn: foe };
   const acts = legalActions(asFoe).filter((a) => a.type === 'ability');
   if (acts.length === 0) {
-    say('相手が、いま使える技がない（もう使い切った、または、条件に合わない）');
+    say('相手が、いま使える Skill がない（もう使い切った、または、制約に合わない）');
     return;
   }
   const act = acts[Math.floor(Math.random() * acts.length)] as Action;
@@ -770,7 +783,7 @@ function buildDebugPanel(): void {
   });
 
   const select = document.createElement('select');
-  const auto = new Option('能力本来のレア度', '');
+  const auto = new Option('Skill 本来のレア度', '');
   select.add(auto);
   for (const r of RARITIES) select.add(new Option(`${r} の演出にする`, r));
   select.addEventListener('change', () => {
@@ -783,7 +796,7 @@ function buildDebugPanel(): void {
   check.addEventListener('change', () => {
     keepAbilities = check.checked;
   });
-  label.append(check, '能力を使っても減らさない');
+  label.append(check, 'Skill を使っても減らさない');
 
   const labelAll = document.createElement('label');
   const checkAll = document.createElement('input');
@@ -792,7 +805,7 @@ function buildDebugPanel(): void {
     debugShowAll = checkAll.checked;
     refresh();
   });
-  labelAll.append(checkAll, '手札を、全部見る');
+  labelAll.append(checkAll, 'Skill を、全部見る');
 
   // ---- 場面・結果・Gold の確認（対局に影響しない演出は、そのまま出す） ----
   const mkRow = (items: readonly (readonly [string, () => void])[]) => {
@@ -820,7 +833,7 @@ function buildDebugPanel(): void {
     ['勝ち画面', sampleResult(true)],
     ['負け画面', sampleResult(false)],
   ]);
-  const foeRow = mkRow([['相手が技を使う（本物の手札から）', debugFoeSkill]]);
+  const foeRow = mkRow([['相手が Skill を使う（本物の手札から）', debugFoeSkill]]);
   const forceRow = mkRow([
     ['自分が勝った状態', () => forceWinner(true)],
     ['自分が負けた状態', () => forceWinner(false)],
@@ -830,9 +843,9 @@ function buildDebugPanel(): void {
     ['+10,000 G', () => debugGold(10000)],
     ['Gold を 0 に', () => debugGold(-wallet.gold)],
   ]);
-  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の能力で使うときの演出'), select, label, labelAll);
-  panel.append(title('コイントス'), tossRow, title('技を引く演出（レア度ごと）'), drawRow, title('結果の画面（見た目だけ）'), resultRow);
-  panel.append(title('相手が技を使ったときの表示'), foeRow, title('勝敗を、いまの対局につける（CPU 戦で、結果・Gold まで）'), forceRow, title('Gold'), goldRow);
+  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の Skill で使うときの演出'), select, label, labelAll);
+  panel.append(title('コイントス'), tossRow, title('Skill を引く演出（レア度ごと）'), drawRow, title('結果の画面（見た目だけ）'), resultRow);
+  panel.append(title('相手が Skill を使ったときの表示'), foeRow, title('勝敗を、いまの対局につける（CPU 戦で、結果・Gold まで）'), forceRow, title('Gold'), goldRow);
 
   const toggle = (open: boolean) => {
     panel.hidden = !open;
