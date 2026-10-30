@@ -16,6 +16,9 @@ import {
   WALLS_PER_PLAYER,
 } from './index';
 import type { AbilityId, Action, GameState, Orientation, PlayerId, Pos, Rarity, WallSpec } from './index';
+import { LEVEL_NAMES, chooseAction, levelStars } from './cpu';
+import { createRng } from './rng';
+import { seatOfA, tossFirst } from './toss';
 import { BoardView } from './view/board3d';
 import { CUTIN_TIMING, playCutIn } from './view/cutin';
 import { cellToWorld, nearestCell, nearestShortSlot, nearestWallSlot, wallToWorld } from './view/layout';
@@ -25,7 +28,9 @@ import { shout, stopVoice } from './view/voice';
 import './ui/ui.css';
 import { handCount, visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
+import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
+import { showToss } from './ui/toss';
 
 /** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
 type Mode = 'move' | 'wall' | 'diagonal' | 'leap' | 'nova1' | 'nova2' | 'reclaim' | 'aegis' | 'void';
@@ -71,6 +76,15 @@ let novaFirst: Pos | null = null;
 let shortMode = false;
 /** 手札を見ているか（手番が替わると、また伏せる）。相手に見せないための決まり */
 let lastTurn: PlayerId = 0;
+/** 対戦の形（CPU か、二人で）と、CPU の強さ。参加者 A（あなた / プレイヤー1）の席。CPU が座っている席（CPU 戦でなければ null） */
+let vs: 'cpu' | 'local' = 'local';
+let cpuLevel = 5;
+let seatA: PlayerId = 0;
+let cpuSeat: PlayerId | null = null;
+/** コイントスの最中は、操作を受け付けない */
+let tossing = false;
+let cpuReadyAt = 0;
+
 /** 手札で選んでいる（次のタップで使う）能力 */
 let armedAbility: AbilityId | null = null;
 /** デバッグ: 手札を、全部見えるようにする */
@@ -98,6 +112,22 @@ const btnRotate = el<HTMLButtonElement>('btn-rotate');
 const btnLength = el<HTMLButtonElement>('btn-length');
 const btnUndo = el<HTMLButtonElement>('btn-undo');
 const btnReset = el<HTMLButtonElement>('btn-reset');
+
+/** 人の操作を受け付けないか（演出中・コイントス中・CPU の番） */
+function locked(): boolean {
+  return busy || tossing || (cpuSeat !== null && state.winner === null && state.turn === cpuSeat);
+}
+
+/** 画面に手札を出す席。CPU 戦では、CPU の番でも、あなたの手札のまま */
+function handSeat(): PlayerId {
+  return cpuSeat === null ? state.turn : cpuSeat === 0 ? 1 : 0;
+}
+
+function seatLabel(p: PlayerId): string {
+  const isA = p === seatA;
+  if (vs === 'cpu') return isA ? 'あなた' : `CPU ${levelStars(cpuLevel)} ${LEVEL_NAMES[cpuLevel - 1] ?? ''}`;
+  return isA ? 'プレイヤー1' : 'プレイヤー2';
+}
 
 function ghostKey(w: WallSpec | null): string {
   return w === null ? '' : `${w.o}${w.x},${w.y}${w.half ?? ''}`;
@@ -198,9 +228,10 @@ function renderHand(): void {
     }
     return;
   }
-  const left = visibleCards(state, state.turn, true, debugShowAll) ?? [];
+  const seat = handSeat();
+  const left = state.abilities[seat];
   // 配られた手札（使ったものも、灰色で残す）。使った枚数は、配られた手札と今の手札の差
-  const cards = debugShowAll ? left : newGame(seed).abilities[state.turn];
+  const cards = debugShowAll ? left : newGame(seed).abilities[seat];
   const remaining = [...left];
   const spent = new Set<number>();
   cards.forEach((id, i) => {
@@ -208,10 +239,11 @@ function renderHand(): void {
     if (at < 0) spent.add(i);
     else remaining.splice(at, 1);
   });
-  abilitiesEl.appendChild(div('hand-count', `残り ${handCount(state, state.turn)} / ${cards.length} 回`));
+  abilitiesEl.appendChild(div('hand-count', `残り ${handCount(state, seat)} / ${cards.length} 回`));
   // 今の盤で、実際に使える技（使える行動が 1 つでもあるもの）
   const usable = new Set<AbilityId>();
-  for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
+  if (state.turn === seat) for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
+  else for (const id of left) usable.add(id);
   for (const [i, id] of cards.entries()) {
     const def = abilityDef(id);
     const b = document.createElement('button');
@@ -243,7 +275,7 @@ function renderHand(): void {
     b.addEventListener('mouseenter', showDesc);
     b.addEventListener('focus', showDesc);
     b.addEventListener('click', () => {
-      if (busy) return;
+      if (locked()) return;
       if (armedAbility === id) {
         armedAbility = null;
         useAbility(id);
@@ -263,7 +295,9 @@ function renderPlayerCards(): void {
     const card = pcardEls[p];
     card.replaceChildren();
     card.classList.toggle('active', state.winner === null ? state.turn === p : state.winner === p);
-    card.appendChild(div('pname', NAMES[p]));
+    const nameRow = div('pname', NAMES[p]);
+    nameRow.appendChild(div('pwho', seatLabel(p)));
+    card.appendChild(nameRow);
     const walls = div('prow');
     walls.append(document.createTextNode('壁'));
     const pips = div('pips');
@@ -309,7 +343,7 @@ function runEffect(name: string, reading: string, rarity: Rarity, player: Player
 }
 
 function useAbility(id: AbilityId): void {
-  if (busy) return;
+  if (locked()) return;
   const def = abilityDef(id);
   // 場所を選ばない能力は、押したらすぐ使う。混沌は、乱数の種も、操作の記録に残す（同じ結果を再現できるように）
   if (INSTANT_ABILITIES.has(id)) {
@@ -350,7 +384,7 @@ function refresh(): void {
   if (mode !== 'nova2') novaFirst = null;
   if (!(state.shortWalls[state.turn] > 0)) shortMode = false;
   let markers: readonly { x: number; y: number }[] = [];
-  if (state.winner === null) {
+  if (state.winner === null && !(cpuSeat !== null && state.turn === cpuSeat)) {
     if (mode === 'move' || mode === 'nova1') markers = legalPawnMoves(state);
     else if (mode === 'diagonal') markers = legalDiagonalMoves(state);
     else if (mode === 'leap') markers = legalLeapMoves(state);
@@ -439,7 +473,7 @@ function replay(forSeed: number, actions: readonly Action[]): GameState {
 }
 
 function setMode(next: Mode): void {
-  if (busy) return;
+  if (locked()) return;
   mode = next;
   say('');
   refresh();
@@ -479,17 +513,17 @@ const stage = el('stage');
 let keyAtDown = '';
 
 stage.addEventListener('pointermove', (e) => {
-  if (!busy) updatePreview(e.clientX, e.clientY);
+  if (!locked()) updatePreview(e.clientX, e.clientY);
 });
 
 stage.addEventListener('pointerdown', (e) => {
-  if (busy) return;
+  if (locked()) return;
   keyAtDown = ghostKey(ghost);
   updatePreview(e.clientX, e.clientY);
 });
 
 stage.addEventListener('pointerup', (e) => {
-  if (busy || state.winner !== null) return;
+  if (locked() || state.winner !== null) return;
   if (mode === 'move' || mode === 'diagonal' || mode === 'leap' || mode === 'nova1' || mode === 'nova2') {
     const p = view.pick(e.clientX, e.clientY);
     if (p === null) return;
@@ -514,36 +548,56 @@ stage.addEventListener('pointerup', (e) => {
 btnMove.addEventListener('click', () => setMode('move'));
 btnWall.addEventListener('click', () => setMode('wall'));
 btnRotate.addEventListener('click', () => {
-  if (busy) return;
+  if (locked()) return;
   orient = orient === 'h' ? 'v' : 'h';
   refresh();
 });
 btnLength.addEventListener('click', () => {
-  if (busy) return;
+  if (locked()) return;
   shortMode = !shortMode;
   mode = 'wall'; // 長さを選ぶのは、壁を置くとき
   say(shortMode ? '短い壁（1 マス分）で置く' : '');
   refresh();
 });
 btnUndo.addEventListener('click', () => {
-  if (busy || log.length === 0) return;
-  log = log.slice(0, -1);
+  if (locked() || log.length === 0) return;
+  // CPU 戦では、自分の番まで戻す（CPU の手と、自分の手を、いっしょに取り消す）
+  let keep = log.length - 1;
+  while (keep > 0 && cpuSeat !== null && replay(seed, log.slice(0, keep)).turn !== (cpuSeat === 0 ? 1 : 0)) keep--;
+  log = log.slice(0, keep);
   state = replay(seed, log);
   mode = 'move';
   say('');
   refresh();
 });
-function resetGame(): void {
+/** 新しい対局。種を決め、先手・後手をコイントスで決めてから始める */
+function startMatch(choice: MatchChoice, animate = true): void {
+  vs = choice.vs;
+  if (choice.vs === 'cpu') cpuLevel = choice.level;
   seed = newSeed();
   state = newGame(seed);
   log = [];
   mode = 'move';
+  armedAbility = null;
   lastTurn = state.turn;
+  const first = tossFirst(seed);
+  seatA = seatOfA(first);
+  cpuSeat = vs === 'cpu' ? (seatA === 0 ? 1 : 0) : null;
   say('');
   refresh();
+  if (!animate) return;
+  tossing = true;
+  void showToss({ a: seatLabel(seatA), b: seatLabel(seatA === 0 ? 1 : 0), first, firstSeat: NAMES[0], secondSeat: NAMES[1] }).then(() => {
+    tossing = false;
+    refresh();
+  });
+}
+
+function resetGame(): void {
+  startMatch(vs === 'cpu' ? { vs, level: cpuLevel } : { vs });
 }
 btnReset.addEventListener('click', () => {
-  if (busy) return;
+  if (locked()) return;
   resetGame();
 });
 
@@ -639,8 +693,8 @@ window.addEventListener('keydown', (e) => {
 const shell = createShell({
   skipOpening: params.has('skip') || params.has('debug'),
   onSlam: playTitleSfx,
-  onStart: () => {
-    refresh();
+  onStart: (choice) => {
+    startMatch(choice);
   },
   onRestart: resetGame,
 });
@@ -648,5 +702,25 @@ el('btn-codex').addEventListener('click', () => shell.openCodex());
 el('btn-menu').addEventListener('click', () => {
   if (!busy) shell.openMenu();
 });
+
+/** CPU の番になったら、少し待ってから（考えているように見せる）、手を打つ */
+function cpuTick(): void {
+  const cpuTurn = cpuSeat !== null && state.winner === null && state.turn === cpuSeat;
+  if (!cpuTurn || busy || tossing || shell.isOpen()) {
+    cpuReadyAt = 0;
+    return;
+  }
+  const now = performance.now();
+  if (cpuReadyAt === 0) {
+    cpuReadyAt = now + 700;
+    say('CPU が考えている…');
+    return;
+  }
+  if (now < cpuReadyAt) return;
+  cpuReadyAt = 0;
+  say('');
+  play(chooseAction(state, cpuLevel, createRng((seed + log.length * 7919) >>> 0)));
+}
+window.setInterval(cpuTick, 150);
 
 refresh();

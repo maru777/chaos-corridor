@@ -2,7 +2,8 @@ import { createRng } from '../rng';
 import { burstPath } from '../view/fxplan';
 import { renderCodex } from './codex';
 import { SLAM_MS, menuItems, nextPhase } from './opening';
-import type { MenuItem, OpeningEvent, OpeningPhase } from './opening';
+import { CPU_LEVELS, LEVEL_NAMES, levelStars } from '../cpu';
+import type { MatchChoice, MenuItem, OpeningEvent, OpeningPhase } from './opening';
 import { RULES } from './rules';
 
 /**
@@ -15,8 +16,8 @@ export interface ShellOptions {
   readonly skipOpening: boolean;
   /** ロゴが落ちる瞬間に呼ばれる（効果音を鳴らす。ユーザーが押した直後なので、音を出せる） */
   readonly onSlam: () => void;
-  /** 「はじめる」が押されたとき */
-  readonly onStart: () => void;
+  /** 対戦の相手が選ばれたとき（CPU は、段階も） */
+  readonly onStart: (choice: MatchChoice) => void;
   /** 「最初からやりなおす」が押されたとき */
   readonly onRestart: () => void;
 }
@@ -39,6 +40,25 @@ export function createShell(opts: ShellOptions): Shell {
   const menu = byId('op-menu');
   const codex = byId('codex');
   const rules = byId('rules');
+  const levels = byId('levels');
+
+  // CPU の段階の選択肢
+  const levelList = byId('levels-list');
+  for (let l = 1; l <= CPU_LEVELS; l++) {
+    const b = document.createElement('button');
+    b.className = 'level-btn';
+    b.dataset['level'] = String(l);
+    const n = document.createElement('strong');
+    n.textContent = levelStars(l);
+    const t = document.createElement('small');
+    t.textContent = LEVEL_NAMES[l - 1] ?? '';
+    b.append(n, t);
+    b.addEventListener('click', () => {
+      closeModal(levels);
+      begin({ vs: 'cpu', level: l });
+    });
+    levelList.appendChild(b);
+  }
 
   let phase: OpeningPhase = opts.skipOpening ? 'closed' : 'splash';
   let started = opts.skipOpening;
@@ -90,12 +110,21 @@ export function createShell(opts: ShellOptions): Shell {
     m.hidden = true;
   }
 
+  /** 対戦を始める（メニューを閉じて、相手を知らせる） */
+  function begin(choice: MatchChoice): void {
+    started = true;
+    dispatch('start');
+    dispatch('resume'); // 対局中にメニューから新しく始めたときは、menu → closed
+    opts.onStart(choice);
+  }
+
   function choose(item: MenuItem): void {
     switch (item.id) {
-      case 'start':
-        started = true;
-        dispatch('start');
-        opts.onStart();
+      case 'cpu':
+        openModal(levels);
+        break;
+      case 'local':
+        begin({ vs: 'local' });
         break;
       case 'resume':
         dispatch('resume');
@@ -129,9 +158,10 @@ export function createShell(opts: ShellOptions): Shell {
     if (phase === 'splash' || phase === 'slam') dispatch('tap');
   });
 
+  byId('levels-close').addEventListener('click', () => closeModal(levels));
   byId('codex-close').addEventListener('click', () => closeModal(codex));
   byId('rules-close').addEventListener('click', () => closeModal(rules));
-  for (const m of [codex, rules]) {
+  for (const m of [codex, rules, levels]) {
     m.addEventListener('click', (e) => {
       if (e.target === m) closeModal(m); // 枠の外を押したら閉じる
     });
@@ -139,7 +169,8 @@ export function createShell(opts: ShellOptions): Shell {
 
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!codex.hidden) closeModal(codex);
+    if (!levels.hidden) closeModal(levels);
+    else if (!codex.hidden) closeModal(codex);
     else if (!rules.hidden) closeModal(rules);
     else if (phase === 'menu' && started) dispatch('resume');
   });
@@ -147,7 +178,7 @@ export function createShell(opts: ShellOptions): Shell {
   setPhase(phase);
 
   return {
-    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden,
+    isOpen: () => phase !== 'closed' || !codex.hidden || !rules.hidden || !levels.hidden,
     openMenu: () => dispatch('openMenu'),
     openCodex: () => openModal(codex),
   };

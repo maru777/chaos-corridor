@@ -24,8 +24,11 @@ export function nextPhase(phase: OpeningPhase, event: OpeningEvent): OpeningPhas
   }
 }
 
+/** 対局の相手の選び方 */
+export type MatchChoice = { readonly vs: 'local' } | { readonly vs: 'cpu'; readonly level: number };
+
 export interface MenuItem {
-  readonly id: 'start' | 'resume' | 'codex' | 'rules' | 'restart';
+  readonly id: 'cpu' | 'local' | 'resume' | 'codex' | 'rules' | 'restart';
   readonly label: string;
   /** 目立たせるボタン */
   readonly primary: boolean;
@@ -34,9 +37,11 @@ export interface MenuItem {
 /** メニューのボタン。始めていなければ「はじめる」、始めていれば「つづける」と「最初からやりなおす」 */
 export function menuItems(started: boolean): MenuItem[] {
   return [
-    started ? { id: 'resume', label: 'つづける', primary: true } : { id: 'start', label: 'はじめる', primary: true },
+    ...(started ? ([{ id: 'resume', label: 'つづける', primary: true }] as const) : []),
+    { id: 'cpu', label: started ? 'CPU と新しく対戦' : 'CPU と対戦', primary: !started },
+    { id: 'local', label: started ? '二人で新しく対戦' : '二人で対戦', primary: false },
     { id: 'codex', label: '技一覧', primary: false },
     { id: 'rules', label: 'あそびかた', primary: false },
-    ...(started ? ([{ id: 'restart', label: '最初からやりなおす', primary: false }] as const) : []),
+    ...(started ? ([{ id: 'restart', label: '同じ相手で、やりなおす', primary: false }] as const) : []),
   ];
 }

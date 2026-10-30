@@ -107,8 +107,8 @@ describe('オープニングの流れ', () => {
   });
 
   it('メニューのボタンは、始める前と、始めたあとで変わる', () => {
-    expect(menuItems(false).map((m) => m.id)).toEqual(['start', 'codex', 'rules']);
-    expect(menuItems(true).map((m) => m.id)).toEqual(['resume', 'codex', 'rules', 'restart']);
+    expect(menuItems(false).map((m) => m.id)).toEqual(['cpu', 'local', 'codex', 'rules']);
+    expect(menuItems(true).map((m) => m.id)).toEqual(['resume', 'cpu', 'local', 'codex', 'rules', 'restart']);
     expect(menuItems(false)[0]?.primary).toBe(true);
   });
 });

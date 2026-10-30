@@ -247,6 +247,23 @@
       </div>
     </div>
 
+    <div id="levels" class="overlay modal" hidden>
+      <div class="modal-box" role="dialog" aria-label="CPU の強さ">
+        <header><h2>CPU の強さ</h2><button id="levels-close">とじる</button></header>
+        <div class="modal-body"><div id="levels-list"></div><p class="levels-note">★が増えるほど、先を深く読みます（★5 は、考えるのに、数秒かかります）。</p></div>
+      </div>
+    </div>
+
+    <!-- 先手・後手を決めるコイントス（対局のはじめに出る） -->
+    <div id="toss" class="overlay" hidden>
+      <div class="toss-stage">
+        <p class="toss-title">先手・後手を決める</p>
+        <div class="coin-wrap"><div class="coin" id="coin"><span class="coin-face a" id="coin-a"></span><span class="coin-face b" id="coin-b"></span></div></div>
+        <p class="toss-result" id="toss-result"></p>
+        <p class="toss-hint" id="toss-hint">タップで進む</p>
+      </div>
+    </div>
+
     <div id="rules" class="overlay modal" hidden>
       <div class="modal-box" role="dialog" aria-label="あそびかた">
         <header><h2>あそびかた</h2><button id="rules-close">とじる</button></header>
