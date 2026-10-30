@@ -236,9 +236,20 @@
 }
 
 /* ===== コイントス ===== */
-#toss { background: rgba(2, 1, 14, 0.86); z-index: 60; }
+#toss { background: #d4001a; z-index: 60; overflow: hidden; }
+/* 背景: 赤地に、黒の斜めの切り込みと、ハーフトーンの点（漫画のコマ） */
+.toss-bg { position: absolute; inset: 0; pointer-events: none; }
+.toss-slash { position: absolute; background: #05030f; }
+.toss-slash.s1 { left: -10%; right: 30%; top: 58%; height: 70%; clip-path: polygon(0 18%, 100% 0, 92% 100%, 0 100%); }
+.toss-slash.s2 { left: 55%; right: -10%; top: -10%; height: 44%; clip-path: polygon(8% 0, 100% 0, 100% 100%, 0 70%); }
+.toss-dots { position: absolute; inset: 0; background: radial-gradient(circle, rgba(5, 3, 15, 0.38) 1.6px, transparent 2.2px) 0 0 / 11px 11px; -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 55%); mask-image: linear-gradient(160deg, #000 0%, transparent 55%); }
+#toss.flash .toss-bg { animation: toss-flash 420ms ease-out; }
+@keyframes toss-flash { 0% { filter: brightness(3.2) contrast(0.6); transform: scale(1.05); } 100% { filter: none; transform: none; } }
 .toss-stage { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 16px; text-align: center; }
-.toss-title { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: 0.12em; color: #fff; -webkit-text-stroke: 4px var(--ink2); paint-order: stroke fill; }
+.toss-stage { position: relative; }
+.toss-title { margin: 0; padding: 4px 22px 6px; font-size: clamp(18px, 5vw, 26px); font-weight: 900; font-style: italic; letter-spacing: 0.14em; color: #05030f; background: #fff; transform: skewX(-12deg) rotate(-3deg); box-shadow: 6px 6px 0 #05030f; }
+.toss-title::first-line { letter-spacing: 0.14em; }
+.coin-wrap { filter: drop-shadow(4px 4px 0 #05030f); margin-top: 70px; }
 /* コイン: 厚みのある金属のコインを、縦に回して投げ上げる（上がって、落ちて、ひと跳ねして止まる） */
 .coin-wrap { position: relative; width: min(46vw, 190px); height: min(58vw, 250px); perspective: 700px; }
 .coin-lift, .coin { position: absolute; left: 0; right: 0; bottom: 18px; height: min(46vw, 190px); transform-style: preserve-3d; }
@@ -257,9 +268,22 @@
 /* 上がって（減速）、落ちて（加速）、2 回ほど小さく跳ねる */
 @keyframes coin-toss { 0% { transform: translateY(0); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); } 45% { transform: translateY(-120px); animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4); } 78% { transform: translateY(0); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); } 87% { transform: translateY(-16px); animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4); } 94% { transform: translateY(0); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); } 97% { transform: translateY(-4px); animation-timing-function: ease-in; } 100% { transform: translateY(0); } }
 @keyframes coin-shadow { 0%, 100% { transform: scale(1); opacity: 0.55; } 45% { transform: scale(0.55); opacity: 0.25; } 78% { transform: scale(1); opacity: 0.55; } 87% { transform: scale(0.9); opacity: 0.45; } 94% { transform: scale(1); opacity: 0.55; } }
-.toss-result { min-height: 2.6em; margin: 0; font-size: clamp(18px, 5.4vw, 28px); font-weight: 900; line-height: 1.35; color: #fff; -webkit-text-stroke: 5px var(--ink2); paint-order: stroke fill; opacity: 0; transform: scale(0.7); }
-.toss-result.show { opacity: 1; transform: none; transition: opacity 160ms, transform 260ms cubic-bezier(0.2, 1.6, 0.4, 1); }
-.toss-hint { margin: 0; font-size: 12px; color: #ccd; }
+/* 結果: 名前の札・大きな先手の札・小さな札が、斜めに飛び込んでくる */
+.toss-result { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 9.5em; margin: 0; }
+.toss-result > span { display: block; opacity: 0; }
+.toss-result b { display: block; font-weight: 900; font-style: italic; }
+.toss-result .res-name { background: #05030f; color: #fff; padding: 4px 26px; font-size: clamp(18px, 5.4vw, 28px); transform: skewX(-14deg); box-shadow: 5px 5px 0 #fff; }
+.toss-result .res-name b { transform: skewX(14deg); }
+.toss-result .res-first { background: #fff; color: #d4001a; padding: 0 30px 2px; font-size: clamp(40px, 13vw, 72px); line-height: 1.15; letter-spacing: 0.06em; clip-path: polygon(4% 0, 100% 6%, 96% 100%, 0 92%); transform: rotate(-4deg); filter: drop-shadow(6px 6px 0 #05030f); }
+.toss-result .res-second { background: #05030f; color: #fff; padding: 2px 18px; font-size: clamp(12px, 3.6vw, 16px); transform: skewX(-14deg); }
+.toss-result .res-second b { transform: skewX(14deg); }
+.toss-result.show .res-name { animation: res-in 360ms cubic-bezier(0.2, 1.4, 0.4, 1) 0ms both; }
+.toss-result.show .res-first { animation: res-slam 420ms cubic-bezier(0.2, 1.6, 0.4, 1) 160ms both; }
+.toss-result.show .res-second { animation: res-in 360ms cubic-bezier(0.2, 1.4, 0.4, 1) 380ms both; }
+@keyframes res-in { from { opacity: 0; translate: -60vw 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes res-slam { from { opacity: 0; scale: 3; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: reduce) { .toss-result.show > span { animation: none; opacity: 1; } #toss.flash .toss-bg { animation: none; } }
+.toss-hint { margin: 0; padding: 0 10px; font-size: 12px; color: #fff; background: #05030f; }
 @media (prefers-reduced-motion: reduce) { .coin.spin, .coin-lift.spin, .coin-shadow.spin { animation: none; } .coin.spin { transform: rotateX(var(--end)); } }
 
 /* ===== CPU の強さ ===== */

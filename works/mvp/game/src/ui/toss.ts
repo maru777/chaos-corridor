@@ -20,6 +20,21 @@ export function tossResultText(v: TossView): string {
 
 const SPIN_MS = 2300;
 
+/** 結果を、漫画のコマのように組む: 大きな「先手」の札と、名前の札、あとの人の小さな札 */
+function fillResult(box: HTMLElement, v: TossView): void {
+  const winner = v.first === 0 ? v.a : v.b;
+  const loser = v.first === 0 ? v.b : v.a;
+  const mk = (cls: string, text: string) => {
+    const e = document.createElement('span');
+    e.className = cls;
+    const t = document.createElement('b');
+    t.textContent = text;
+    e.appendChild(t);
+    return e;
+  };
+  box.replaceChildren(mk('res-name', winner), mk('res-first', v.firstSeat), mk('res-second', `${loser} は ${v.secondSeat}`));
+}
+
 /** コインを回して、結果を見せる。タップ（または少し待つ）と終わる。動きを減らす設定のときは、回さずに結果だけ出す */
 export function showToss(view: TossView): Promise<void> {
   const root = document.getElementById('toss');
@@ -33,7 +48,8 @@ export function showToss(view: TossView): Promise<void> {
   if (!root || !coin || !lift || !shadow || !faceA || !faceB || !result || !hint) return Promise.resolve();
   faceA.textContent = view.a;
   faceB.textContent = view.b;
-  result.textContent = '';
+  result.replaceChildren();
+  root.classList.remove('flash');
   result.classList.remove('show');
   hint.hidden = true;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -60,8 +76,9 @@ export function showToss(view: TossView): Promise<void> {
     const reveal = () => {
       if (revealed) return;
       revealed = true;
-      result.textContent = tossResultText(view);
+      fillResult(result, view);
       result.classList.add('show');
+      root.classList.add('flash');
       hint.hidden = false;
       window.setTimeout(finish, 2600);
     };
