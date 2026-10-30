@@ -307,3 +307,9 @@
 .codex-text { white-space: pre-line; }
 /* 使った技は、表向きで、少し暗く見せる（相手が使ったカードも見える） */
 .pcard .mini-card.used { filter: grayscale(0.6) brightness(0.85); outline: 2px solid var(--ink2); }
+
+/* 技の説明: 見出し（効果・手番・制約）は、同じ色で目立たせる。行ごとに改行 */
+.eff-line { display: block; }
+.eff-label { color: #e8420e; font-weight: 900; }
+.dn-text .eff-label { color: #ff8a3d; }
+#hand-desc, .dn-text, .codex-text { white-space: normal; }

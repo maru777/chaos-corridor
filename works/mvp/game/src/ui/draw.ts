@@ -5,6 +5,7 @@ import { createRng } from '../rng';
 import { playCardRainSfx, playDartSfx, playSfx, playWallSfx } from '../view/sfx';
 import { shout } from '../view/voice';
 import { drawTiming, planDraw } from './drawplan';
+import { fillEffect } from './effecttext';
 import { abilityIconSvg } from './icons';
 
 /**
@@ -204,7 +205,10 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   }
   await sleep(700 * Math.max(k, 0.3));
   // 技名の札
-  slab.append(el('b', 'dn-rarity', def.rarity), el('b', 'dn-name', def.name), el('b', 'dn-read', def.reading), el('b', 'dn-text', def.text));
+  slab.append(el('b', 'dn-rarity', def.rarity), el('b', 'dn-name', def.name), el('b', 'dn-read', def.reading));
+  const effect = el('b', 'dn-text');
+  fillEffect(effect, def.text);
+  slab.append(effect);
   slab.classList.add('show');
   await sleep(Math.max(0, t.revealMs - 700) * k);
   root.classList.remove('shake', 'dim');

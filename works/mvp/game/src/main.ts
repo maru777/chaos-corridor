@@ -37,6 +37,7 @@ import { createShell } from './ui/shell';
 import { coverScreen, revealScreen } from './ui/curtain';
 import { playDraws } from './ui/draw';
 import { showResult } from './ui/result';
+import { fillEffect } from './ui/effecttext';
 import { renderShop } from './ui/shop';
 import { showToss } from './ui/toss';
 import { loadWallet, saveWallet } from './save';
@@ -306,7 +307,7 @@ function renderHand(): void {
       b.setAttribute('aria-label', `${def.name}。使用済み`);
     } else if (!usable.has(id)) b.disabled = true;
     const showDesc = () => {
-      handDescEl.textContent = armedAbility === id ? `${def.text}（もう一度タップで使う）` : def.text;
+      fillEffect(handDescEl, def.text, armedAbility === id ? '→ もう一度タップで使う' : undefined);
     };
     // 触れている間は、効果の説明を出す。タップで選び、同じカードをもう一度タップで使う
     b.addEventListener('pointerdown', showDesc);
@@ -327,7 +328,7 @@ function renderHand(): void {
       }
       armedAbility = id;
       renderHand();
-      handDescEl.textContent = `${def.text}（もう一度タップで使う）`;
+      fillEffect(handDescEl, def.text, '→ もう一度タップで使う');
     });
     abilitiesEl.appendChild(b);
   }

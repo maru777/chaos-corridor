@@ -1,3 +1,4 @@
+import { fillEffect } from './effecttext';
 import { ABILITIES, RARITIES, RARITY_WEIGHT } from '../abilities';
 import type { Rarity } from '../abilities';
 import { abilityIconSvg } from './icons';
@@ -68,11 +69,19 @@ export function renderCodex(container: HTMLElement): void {
       const plate = el('span', 'codex-plate');
       plate.innerHTML = abilityIconSvg(a.id as Parameters<typeof abilityIconSvg>[0]); // アイコンは、コードで作った SVG（外部の入力ではない）
       const body = el('div', 'codex-body');
-      body.append(el('strong', 'codex-name', a.name), el('small', 'codex-reading', a.reading), el('p', 'codex-text', a.text), el('span', 'codex-chance', `この技 ${a.chance}%`));
+      body.append(el('strong', 'codex-name', a.name), el('small', 'codex-reading', a.reading), effectParagraph(a.text), el('span', 'codex-chance', `この技 ${a.chance}%`));
       card.append(plate, body);
       grid.appendChild(card);
     }
     section.append(head, grid);
     container.appendChild(section);
   }
+}
+
+/** 説明（効果・手番・制約）の段落 */
+function effectParagraph(text: string): HTMLParagraphElement {
+  const p = document.createElement('p');
+  p.className = 'codex-text';
+  fillEffect(p, text);
+  return p;
 }
