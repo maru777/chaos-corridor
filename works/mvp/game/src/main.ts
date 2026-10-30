@@ -26,10 +26,14 @@ import { showPop } from './view/popsfx';
 import { playMoveSfx, playSfx, playTitleSfx, playWallSfx } from './view/sfx';
 import { shout, stopVoice } from './view/voice';
 import './ui/ui.css';
+import './ui/scenes.css';
+import './ui/persona.css';
 import { handCount, visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
+import { coverScreen, revealScreen } from './ui/curtain';
+import { playDraws } from './ui/draw';
 import { showToss } from './ui/toss';
 
 /** 操作のモード。nova1 / nova2 は、超新星の 1 回目・2 回目の行き先を選ぶ。reclaim / aegis / void は、壁を選ぶ */
@@ -55,7 +59,7 @@ function el<T extends HTMLElement>(id: string): T {
   return e as T;
 }
 
-const NAMES = ['先手（黄）', '後手（桃）'] as const;
+const NAMES = ['先手', '後手'] as const;
 
 function newSeed(): number {
   return Math.floor(Math.random() * 0xffffffff);
@@ -570,10 +574,16 @@ btnUndo.addEventListener('click', () => {
   say('');
   refresh();
 });
-/** 新しい対局。種を決め、先手・後手をコイントスで決めてから始める */
-function startMatch(choice: MatchChoice, animate = true): void {
+/**
+ * 新しい対局。暗転 → コイントス（先手・後手）→ 技を引く（ダーツ）→ 暗転 → 対局、と、場面を順に見せる。
+ * 場面は、急に切り替えず、いったん暗転して、幕が斜めに抜けて出る。
+ */
+async function startMatch(choice: MatchChoice, closeMenu: () => void = () => undefined, animate = true): Promise<void> {
   vs = choice.vs;
   if (choice.vs === 'cpu') cpuLevel = choice.level;
+  tossing = true;
+  if (animate) await coverScreen();
+  closeMenu();
   seed = newSeed();
   state = newGame(seed);
   log = [];
@@ -585,16 +595,28 @@ function startMatch(choice: MatchChoice, animate = true): void {
   cpuSeat = vs === 'cpu' ? (seatA === 0 ? 1 : 0) : null;
   say('');
   refresh();
-  if (!animate) return;
-  tossing = true;
-  void showToss({ a: seatLabel(seatA), b: seatLabel(seatA === 0 ? 1 : 0), first, firstSeat: NAMES[0], secondSeat: NAMES[1] }).then(() => {
-    tossing = false;
-    refresh();
-  });
+  if (animate) {
+    const hideToss = await showToss(
+      { a: seatLabel(seatA), b: seatLabel(seatA === 0 ? 1 : 0), first, firstSeat: NAMES[0], secondSeat: NAMES[1] },
+      revealScreen,
+    );
+    await coverScreen();
+    hideToss();
+    if (vs === 'cpu') {
+      // 引くのは、自分の分だけ。CPU の分は、一言だけ（相手の手札は、見えないまま）
+      const mine = state.abilities[seatA];
+      const hideDraw = await playDraws(mine, seed, revealScreen, `CPU も ${state.abilities[cpuSeat === null ? 0 : cpuSeat].length} 枚引いた`);
+      await coverScreen();
+      hideDraw();
+    }
+  }
+  tossing = false;
+  refresh();
+  if (animate) await revealScreen();
 }
 
-function resetGame(): void {
-  startMatch(vs === 'cpu' ? { vs, level: cpuLevel } : { vs });
+function resetGame(closeMenu: () => void = () => undefined): void {
+  void startMatch(vs === 'cpu' ? { vs, level: cpuLevel } : { vs }, closeMenu);
 }
 btnReset.addEventListener('click', () => {
   if (locked()) return;
@@ -693,10 +715,10 @@ window.addEventListener('keydown', (e) => {
 const shell = createShell({
   skipOpening: params.has('skip') || params.has('debug'),
   onSlam: playTitleSfx,
-  onStart: (choice) => {
-    startMatch(choice);
+  onStart: (choice, closeMenu) => {
+    void startMatch(choice, closeMenu);
   },
-  onRestart: resetGame,
+  onRestart: (closeMenu) => resetGame(closeMenu),
 });
 el('btn-codex').addEventListener('click', () => shell.openCodex());
 el('btn-menu').addEventListener('click', () => {

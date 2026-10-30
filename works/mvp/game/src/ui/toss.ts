@@ -6,12 +6,12 @@ export interface TossView {
   readonly b: string;
   /** 先に動く参加者（0 = A、1 = B） */
   readonly first: 0 | 1;
-  /** 先手の席の呼び名（例: 先手（黄））と、後手の席の呼び名 */
+  /** 先手の席の呼び名（例: 先手）と、後手の席の呼び名 */
   readonly firstSeat: string;
   readonly secondSeat: string;
 }
 
-/** 結果の文。例: 「あなたが 先手（黄）。CPU は 後手（桃）」 */
+/** 結果の文。例: 「あなたが 先手。CPU は 後手」 */
 export function tossResultText(v: TossView): string {
   const winner = v.first === 0 ? v.a : v.b;
   const loser = v.first === 0 ? v.b : v.a;
@@ -36,7 +36,7 @@ function fillResult(box: HTMLElement, v: TossView): void {
 }
 
 /** コインを回して、結果を見せる。タップ（または少し待つ）と終わる。動きを減らす設定のときは、回さずに結果だけ出す */
-export function showToss(view: TossView): Promise<void> {
+export function showToss(view: TossView, beforeStart: () => Promise<void> = () => Promise.resolve()): Promise<() => void> {
   const root = document.getElementById('toss');
   const coin = document.getElementById('coin');
   const lift = coin?.parentElement;
@@ -45,7 +45,7 @@ export function showToss(view: TossView): Promise<void> {
   const faceB = document.getElementById('coin-b');
   const result = document.getElementById('toss-result');
   const hint = document.getElementById('toss-hint');
-  if (!root || !coin || !lift || !shadow || !faceA || !faceB || !result || !hint) return Promise.resolve();
+  if (!root || !coin || !lift || !shadow || !faceA || !faceB || !result || !hint) return Promise.resolve(() => undefined);
   faceA.textContent = view.a;
   faceB.textContent = view.b;
   result.replaceChildren();
@@ -60,17 +60,22 @@ export function showToss(view: TossView): Promise<void> {
   const parts = [coin, lift, shadow];
   for (const e of parts) e.classList.remove('spin');
   root.hidden = false;
+  root.classList.remove('enter');
+  return beforeStart().then(
+    () =>
+      new Promise<() => void>((resolve) => {
+  root.classList.add('enter');
   void coin.offsetWidth; // 回転のやり直しのため、再描画させる
   for (const e of parts) e.classList.add('spin');
 
-  return new Promise<void>((resolve) => {
     let done = false;
     const finish = () => {
       if (done) return;
       done = true;
-      root.hidden = true;
       root.removeEventListener('click', onTap);
-      resolve();
+      resolve(() => {
+        root.hidden = true;
+      });
     };
     let revealed = false;
     const reveal = () => {
@@ -88,5 +93,6 @@ export function showToss(view: TossView): Promise<void> {
     };
     root.addEventListener('click', onTap);
     window.setTimeout(reveal, reduce ? 0 : SPIN_MS + 100);
-  });
+  }),
+  );
 }

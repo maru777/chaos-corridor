@@ -8,7 +8,7 @@ export interface RulesSection {
 export const RULES: readonly RulesSection[] = [
   {
     title: '勝つには',
-    lines: ['先に、反対側の端（自分のゴール行）に着いたほうが勝ち。', '先手（黄）は上の端、後手（桃）は下の端が、ゴール。'],
+    lines: ['先に、反対側の端（自分のゴール行）に着いたほうが勝ち。', '先手は上の端、後手は下の端が、ゴール。（先手は黄色、後手は桃色のコマ）'],
   },
   {
     title: '1 回の手番でやること（どれか 1 つ）',

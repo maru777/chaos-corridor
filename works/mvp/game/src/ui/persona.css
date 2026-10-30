@@ -1,0 +1,24 @@
+/* ===== 赤と黒の漫画（ペルソナ風）: メニューと、技一覧・あそびかた・CPU の強さ ===== */
+
+/* オープニングのメニュー: 赤地に、黒と白の、斜めの札のボタン */
+#opening[data-phase="menu"] { background: #d4001a; }
+#opening[data-phase="menu"]::before { content: ""; position: absolute; left: -10%; right: 20%; top: 62%; height: 70%; background: #05030f; clip-path: polygon(0 16%, 100% 0, 90% 100%, 0 100%); pointer-events: none; }
+#opening[data-phase="menu"]::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(5, 3, 15, 0.35) 1.6px, transparent 2.2px) 0 0 / 11px 11px; -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 55%); mask-image: linear-gradient(160deg, #000 0%, transparent 55%); pointer-events: none; }
+#opening[data-phase="menu"] .op-stage { z-index: 1; }
+#opening[data-phase="menu"] .op-speed { opacity: 0.1; }
+.op-btn { position: relative; border: none; border-radius: 0; background: #05030f; color: #fff; box-shadow: 6px 6px 0 #fff; transform: skewX(-12deg); font-style: italic; min-width: 260px; transition: transform 90ms, box-shadow 90ms, background 90ms, color 90ms; }
+.op-btn:nth-child(even) { transform: skewX(-12deg) translateX(14px); }
+.op-btn:hover:not(:disabled), .op-btn:focus-visible { background: #fff; color: #d4001a; box-shadow: 6px 6px 0 #05030f; }
+.op-btn:active:not(:disabled) { transform: skewX(-12deg) translate(3px, 3px); box-shadow: 2px 2px 0 #fff; }
+.op-btn.primary { background: #fff; color: #d4001a; box-shadow: 8px 8px 0 #05030f; animation: none; }
+.op-btn.primary:hover:not(:disabled), .op-btn.primary:focus-visible { background: #05030f; color: #fff; box-shadow: 8px 8px 0 #fff; }
+
+/* 窓（技一覧・あそびかた・CPU の強さ）: 黒い見出しの札と、赤い縁 */
+.modal { background: rgba(212, 0, 26, 0.9); }
+.modal-box { border: 4px solid #05030f; border-radius: 0; box-shadow: 10px 10px 0 #05030f; clip-path: none; }
+.modal-box > header { background: #05030f; color: #fff; border-bottom: 5px solid #d4001a; }
+.modal-box h2 { color: #fff; font-style: italic; letter-spacing: 0.14em; transform: skewX(-10deg); }
+.modal-box > header button { background: #fff; color: #d4001a; border-radius: 0; border: 3px solid #fff; box-shadow: 3px 3px 0 #d4001a; transform: skewX(-10deg); font-style: italic; }
+.level-btn { border-radius: 0; box-shadow: 5px 5px 0 #05030f; transform: skewX(-6deg); }
+.level-btn:active:not(:disabled) { transform: skewX(-6deg) translate(2px, 2px); box-shadow: 2px 2px 0 #05030f; }
+@media (prefers-reduced-motion: reduce) { .op-btn { transition: none; } }

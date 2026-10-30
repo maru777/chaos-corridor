@@ -17,9 +17,10 @@ export interface ShellOptions {
   /** ロゴが落ちる瞬間に呼ばれる（効果音を鳴らす。ユーザーが押した直後なので、音を出せる） */
   readonly onSlam: () => void;
   /** 対戦の相手が選ばれたとき（CPU は、段階も） */
-  readonly onStart: (choice: MatchChoice) => void;
+  readonly onStart: (choice: MatchChoice, closeMenu: () => void) => void;
   /** 「最初からやりなおす」が押されたとき */
-  readonly onRestart: () => void;
+  /** closeMenu は、暗転した裏で、メニューを閉じるために呼ぶ */
+  readonly onRestart: (closeMenu: () => void) => void;
 }
 
 export interface Shell {
@@ -54,7 +55,6 @@ export function createShell(opts: ShellOptions): Shell {
     t.textContent = LEVEL_NAMES[l - 1] ?? '';
     b.append(n, t);
     b.addEventListener('click', () => {
-      closeModal(levels);
       begin({ vs: 'cpu', level: l });
     });
     levelList.appendChild(b);
@@ -112,10 +112,12 @@ export function createShell(opts: ShellOptions): Shell {
 
   /** 対戦を始める（メニューを閉じて、相手を知らせる） */
   function begin(choice: MatchChoice): void {
-    started = true;
-    dispatch('start');
-    dispatch('resume'); // 対局中にメニューから新しく始めたときは、menu → closed
-    opts.onStart(choice);
+    // メニューは、場面の暗転が済んだ裏で閉じる（急に切り替わらないように）
+    opts.onStart(choice, () => {
+      closeModal(levels);
+      started = true;
+      dispatch('start');
+    });
   }
 
   function choose(item: MenuItem): void {
@@ -123,15 +125,11 @@ export function createShell(opts: ShellOptions): Shell {
       case 'cpu':
         openModal(levels);
         break;
-      case 'local':
-        begin({ vs: 'local' });
-        break;
       case 'resume':
         dispatch('resume');
         break;
       case 'restart':
-        opts.onRestart();
-        dispatch('resume');
+        opts.onRestart(() => dispatch('resume'));
         break;
       case 'codex':
         openModal(codex);
