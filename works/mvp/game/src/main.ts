@@ -726,6 +726,25 @@ function forceWinner(iWin: boolean): void {
   refresh();
 }
 
+/**
+ * デバッグ: 相手が技を使ったときの表示を見る。いまの対局の、相手（CPU 戦では CPU）の番にして、本物の手札から、使える技を 1 つ使わせる。
+ * 相手の色のカットイン、上のプレイヤーカードで、使った技が表向きになる様子、手番の移りが見られる。
+ */
+function debugFoeSkill(): void {
+  if (busy || state.winner !== null) return;
+  const foe: PlayerId = cpuSeat ?? (state.turn === 0 ? 1 : 0);
+  const asFoe: GameState = { ...state, turn: foe };
+  const acts = legalActions(asFoe).filter((a) => a.type === 'ability');
+  if (acts.length === 0) {
+    say('相手が、いま使える技がない（もう使い切った、または、条件に合わない）');
+    return;
+  }
+  const act = acts[Math.floor(Math.random() * acts.length)] as Action;
+  state = asFoe;
+  mode = 'move';
+  play(act);
+}
+
 function debugGold(delta: number): void {
   wallet = { ...wallet, gold: Math.max(0, wallet.gold + delta) };
   saveWallet(wallet);
@@ -801,6 +820,7 @@ function buildDebugPanel(): void {
     ['勝ち画面', sampleResult(true)],
     ['負け画面', sampleResult(false)],
   ]);
+  const foeRow = mkRow([['相手が技を使う（本物の手札から）', debugFoeSkill]]);
   const forceRow = mkRow([
     ['自分が勝った状態', () => forceWinner(true)],
     ['自分が負けた状態', () => forceWinner(false)],
@@ -812,7 +832,7 @@ function buildDebugPanel(): void {
   ]);
   panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の能力で使うときの演出'), select, label, labelAll);
   panel.append(title('コイントス'), tossRow, title('技を引く演出（レア度ごと）'), drawRow, title('結果の画面（見た目だけ）'), resultRow);
-  panel.append(title('勝敗を、いまの対局につける（CPU 戦で、結果・Gold まで）'), forceRow, title('Gold'), goldRow);
+  panel.append(title('相手が技を使ったときの表示'), foeRow, title('勝敗を、いまの対局につける（CPU 戦で、結果・Gold まで）'), forceRow, title('Gold'), goldRow);
 
   const toggle = (open: boolean) => {
     panel.hidden = !open;
