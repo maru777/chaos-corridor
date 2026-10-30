@@ -1,0 +1,1 @@
+seed 49 turn 23 action {"type":"ability","id":"leap","to":{"x":6,"y":1}} before: pawns [{"x":4,"y":6},{"x":4,"y":1}] meteors [] walls 19 -> 19; after pawns [{"x":4,"y":6},{"x":6,"y":1}] meteors []

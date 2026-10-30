@@ -1,4 +1,4 @@
-import { DIRS, bothHavePath, goalRow, inBounds, isBlocked, wallSegments } from './board';
+import { DIRS, bothHavePath, goalRow, hasPathToGoal, inBounds, isBlocked, wallSegments } from './board';
 import { createRng } from './rng';
 import type { AbilityId, Action, ApplyResult, GameState, Meteor, Orientation, PlayerId, Pos, Wall, WallSpec } from './types';
 
@@ -100,6 +100,7 @@ export function legalDiagonalMoves(state: GameState): Pos[] {
 /**
  * 跳躍（能力）で動ける先。上下左右のどれかへ、まっすぐ 2 マス先。間にある壁・コマ・隕石は、すべて飛び越える。
  * 着地するマスに、相手のコマや隕石があってはいけない。
+ * 壁で囲まれた、出口のない場所には着地できない（自分が、ゴールへの道を失って、対局が終わらなくなるため）。
  */
 export function legalLeapMoves(state: GameState): Pos[] {
   const me = state.pawns[state.turn];
@@ -107,7 +108,8 @@ export function legalLeapMoves(state: GameState): Pos[] {
   const out: Pos[] = [];
   for (const d of DIRS) {
     const to = { x: me.x + d.x * 2, y: me.y + d.y * 2 };
-    if (inBounds(state.size, to) && !samePos(to, foe) && !isMeteorAt(state, to)) out.push(to);
+    if (!inBounds(state.size, to) || samePos(to, foe) || isMeteorAt(state, to)) continue;
+    if (hasPathToGoal(state.size, state.walls, to, goalRow(state.size, state.turn), state.meteors)) out.push(to);
   }
   return out;
 }

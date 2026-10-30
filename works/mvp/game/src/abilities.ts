@@ -8,10 +8,10 @@ export const RARITIES: readonly Rarity[] = ['UNCOMMON', 'RARE', 'EPIC', 'LEGENDA
 
 /** ガチャの出やすさ（重み）。レア度が高いほど出にくい */
 export const RARITY_WEIGHT: Readonly<Record<Rarity, number>> = {
-  UNCOMMON: 60,
-  RARE: 28,
-  EPIC: 10,
-  LEGENDARY: 2,
+  UNCOMMON: 46,
+  RARE: 31,
+  EPIC: 16,
+  LEGENDARY: 7,
 };
 
 export interface AbilityDef {
@@ -56,7 +56,7 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '蒼穹の跳躍',
     reading: 'Azure Leap',
     rarity: 'RARE',
-    text: '効果：障害物を飛び越えて、上下左右のどれかへ、まっすぐ 2 マス先へ跳ぶ。\n手番：使う。\n制約：着地するマスが盤の内で、障害物がないこと。',
+    text: '効果：障害物を飛び越えて、上下左右のどれかへ、まっすぐ 2 マス先へ跳ぶ。\n手番：使う。\n制約：着地するマスが盤の内で、障害物がなく、そこからゴールへの道が残ること。',
   },
   {
     id: 'meteor',

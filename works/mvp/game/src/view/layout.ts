@@ -133,7 +133,7 @@ export function safeAreaFromInsets(aspect: number, heightPx: number, topPx: numb
 }
 
 export function cameraRig(aspect: number, size = 9, safeOverride?: SafeArea, pitchOverrideDeg?: number): CameraRig {
-  const pitch = ((pitchOverrideDeg ?? (aspect < 1 ? 70 : 62)) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
+  const pitch = ((pitchOverrideDeg ?? (aspect < 1 ? 80 : 62)) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
   const safe = safeOverride ?? safeArea(aspect);
   const at = (d: number): [number, number, number] => [TARGET[0], TARGET[1] + d * Math.sin(pitch), TARGET[2] + d * Math.cos(pitch)];
   const extent = (d: number) => {
