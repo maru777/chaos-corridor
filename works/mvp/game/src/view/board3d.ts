@@ -9,7 +9,7 @@ import type { GameState, Pos, WallSpec } from '../types';
 import type { Rarity } from '../abilities';
 import { CINEMA_SHADER, OUTLINE_COLOR, glowMaterial, makeGlowTexture, makeToonGradient, outlineMesh } from './fx';
 import { IMPACT_TAIL_MS, impactFrame } from './impact';
-import { cameraRig, cellToWorld, wallToWorld, worldToBoard } from './layout';
+import { cameraRig, cellToWorld, safeAreaFromInsets, wallToWorld, worldToBoard } from './layout';
 import { createSpace } from './space';
 import type { Space } from './space';
 
@@ -379,6 +379,18 @@ export class BoardView {
     return worldToBoard(this.size, hit.x, hit.z);
   }
 
+  /** 画面の上・下に出ている表示の高さ（ピクセル）を返す関数。盤が、それに被らない範囲に収まるようにする */
+  private insets: (() => { top: number; bottom: number }) | undefined;
+
+  setInsets(fn: () => { top: number; bottom: number }): void {
+    this.insets = fn; // 呼び出し側の表示が整ってから、relayout() で反映する
+  }
+
+  /** 表示の大きさが変わったとき（手札の枚数、メッセージなど）に、盤の位置を計算し直す */
+  relayout(): void {
+    this.resize();
+  }
+
   private resize(): void {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
@@ -387,7 +399,9 @@ export class BoardView {
     this.composer.setSize(w, h);
     this.camera.aspect = w / h;
     // 盤が、画面の安全な範囲（上の表示と下の手札・ボタンを避けた所）いっぱいに収まるように、距離と位置を計算で決める
-    const rig = cameraRig(this.camera.aspect, this.size);
+    const insets = this.insets?.();
+    const safe = insets === undefined ? undefined : safeAreaFromInsets(this.camera.aspect, h, insets.top, insets.bottom);
+    const rig = cameraRig(this.camera.aspect, this.size, safe);
     const shiftPx = Math.round((rig.shiftNdc * h) / 2);
     if (shiftPx !== 0) this.camera.setViewOffset(w, h, 0, shiftPx, w, h);
     else this.camera.clearViewOffset();

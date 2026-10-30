@@ -103,6 +103,7 @@ let rarityOverride: Rarity | null = null;
 let keepAbilities = false;
 
 const view = new BoardView(el('stage'), state.size);
+view.setInsets(uiInsets);
 const cutinsEl = el('cutins');
 const statusEl = el('status');
 const msgEl = el('msg');
@@ -131,6 +132,18 @@ function seatLabel(p: PlayerId): string {
   const isA = p === seatA;
   if (vs === 'cpu') return isA ? 'あなた' : `CPU ${levelStars(cpuLevel)} ${LEVEL_NAMES[cpuLevel - 1] ?? ''}`;
   return isA ? 'プレイヤー1' : 'プレイヤー2';
+}
+
+/** 画面に出ている表示の高さ（上: プレイヤーカードと状態、下: 手札とボタン）。盤は、これに被らない所に置く */
+function uiInsets(): { top: number; bottom: number } {
+  const h = window.innerHeight;
+  const landscape = window.innerWidth / h >= 1.25;
+  let top = el('center').getBoundingClientRect().bottom;
+  if (!landscape) for (const c of pcardEls) top = Math.max(top, c.getBoundingClientRect().bottom);
+  const row = btnMove.getBoundingClientRect().top;
+  let bottomEdge = row;
+  if (!landscape && abilitiesEl.childElementCount > 0) bottomEdge = Math.min(bottomEdge, abilitiesEl.getBoundingClientRect().top);
+  return { top: Math.max(0, top), bottom: Math.max(0, h - bottomEdge) };
 }
 
 function ghostKey(w: WallSpec | null): string {
@@ -414,6 +427,7 @@ function refresh(): void {
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
   renderPlayerCards();
   renderHand();
+  view.relayout();
 }
 
 function play(action: Action): void {

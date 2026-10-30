@@ -119,9 +119,22 @@ export function projectBoard(pos: readonly [number, number, number], aspect: num
 }
 
 /** 画面の縦横比から、カメラの位置を決める。盤が、安全な範囲に、できるだけ大きく収まる距離を探す */
-export function cameraRig(aspect: number, size = 9): CameraRig {
+/**
+ * 画面に実際に出ている表示（上のプレイヤーカード、下の手札・ボタン）の高さ（ピクセル）から、盤を置いてよい範囲を決める。
+ * 表示の大きさは、画面や中身で変わるので、決め打ちにしない。margin は、表示との間のすき間（ピクセル）。
+ */
+export function safeAreaFromInsets(aspect: number, heightPx: number, topPx: number, bottomPx: number, margin = 8): SafeArea {
+  const base = safeArea(aspect);
+  const top = 1 - (2 * (topPx + margin)) / heightPx;
+  const bottom = -1 + (2 * (bottomPx + margin)) / heightPx;
+  // 範囲が狭すぎるときは、決め打ちの値に戻す
+  if (!(top - bottom > 0.5)) return base;
+  return { x: base.x, top: Math.min(0.97, top), bottom: Math.max(-0.97, bottom) };
+}
+
+export function cameraRig(aspect: number, size = 9, safeOverride?: SafeArea): CameraRig {
   const pitch = ((aspect < 1 ? 70 : 62) * Math.PI) / 180; // 縦長は真上に近く（押しやすい）、横長は少し寝かせて、奥の宇宙も見せる
-  const safe = safeArea(aspect);
+  const safe = safeOverride ?? safeArea(aspect);
   const at = (d: number): [number, number, number] => [TARGET[0], TARGET[1] + d * Math.sin(pitch), TARGET[2] + d * Math.cos(pitch)];
   const extent = (d: number) => {
     const pts = projectBoard(at(d), aspect, size);

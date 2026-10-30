@@ -41,3 +41,11 @@
 #levels:not([hidden]) .level-btn:nth-child(even) { --from: 110vw; }
 @keyframes lvl-in { from { translate: var(--from) 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #levels:not([hidden]) .level-btn { animation: none; } }
+
+/* タイトル: 上にも黒い斜めの切り込み。最初は、「TAP TO START」だけ。タップで、ロゴが「ドン！」と出る */
+.op-slash-top { position: absolute; left: 35%; right: -10%; top: -8%; height: 34%; background: #05030f; clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 78%); pointer-events: none; }
+#opening[data-phase="splash"] .op-title, #opening[data-phase="splash"] .op-sub, #opening[data-phase="splash"] .op-tag { opacity: 0; }
+#opening[data-phase="slam"] .op-sub, #opening[data-phase="slam"] .op-tag { animation: op-fade-in 500ms ease-out 450ms both; }
+@keyframes op-fade-in { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+/* 強さの選択: 左右の位置は、整えず、毎回ばらばらに（--ox は、開くたびに、ランダムに決める） */
+#levels .level-btn { width: 80%; margin-left: var(--ox, 0%); margin-right: auto; }

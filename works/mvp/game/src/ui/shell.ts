@@ -104,6 +104,10 @@ export function createShell(opts: ShellOptions): Shell {
 
   function openModal(m: HTMLElement): void {
     if (m === codex) renderCodex(byId('codex-body'));
+    if (m === levels) {
+      // 強さの札の左右は、開くたびに、ばらばらにする
+      for (const b of levelList.children) (b as HTMLElement).style.setProperty('--ox', `${Math.round(Math.random() * 20)}%`);
+    }
     m.hidden = false;
   }
 
