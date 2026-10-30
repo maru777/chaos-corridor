@@ -89,7 +89,7 @@
 @media (prefers-reduced-motion: reduce) { .dcard, .dspark, .dring, .dbolt, .dwhite, .dpillar, .drays, .dconfetti, #draw.shake .draw-field, .dcard.trembling { animation: none !important; } .dconfetti, .dpillar, .drays { display: none; } }
 
 /* 大量に降ってくる → 好きなカードをタップ。引いたカードは、上に置きっぱなし */
-.dcard { width: clamp(38px, 10.5vw, 54px); }
+.dcard { width: 112px; margin: -78px 0 0 -56px; }
 .dcard.pickable { cursor: pointer; }
 .dcard.pickable:hover, .dcard.pickable:active { z-index: 4; filter: brightness(1.5); translate: 0 -6px; }
 .dcard.pickable .dback { border-color: #fff; }
@@ -120,3 +120,5 @@
 @keyframes dpunch { 0% { scale: 1.12; } 100% { scale: 1; } }
 #draw[data-rarity="legendary"] .draw-field.punch { animation-duration: 700ms; }
 @media (prefers-reduced-motion: reduce) { .dflash, .dburstlines, .donomat, .draw-field.punch { animation: none !important; } .dflash, .dburstlines { display: none; } .donomat { opacity: 1; } }
+
+.draw-field.fade { opacity: 0.22; transition: opacity 400ms; }

@@ -96,7 +96,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   const fx = root.querySelector('.draw-fx') as HTMLElement;
   const title = root.querySelector('.draw-title') as HTMLElement;
   const slab = root.querySelector('.draw-name') as HTMLElement;
-  field.classList.remove('punch');
+  field.classList.remove('punch', 'fade');
   field.replaceChildren();
   fx.replaceChildren();
   slab.replaceChildren();
@@ -182,7 +182,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     const scale = { UNCOMMON: 1.5, RARE: 1.65, EPIC: 1.85, LEGENDARY: 2.1 }[rarity];
     reveal.animate(
       [
-        { transform: `translate(${dx}px, ${dy}px) scale(0.45)` },
+        { transform: `translate(${dx}px, ${dy}px) scale(1)` },
         { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 30}px) scale(${scale * 0.8})`, offset: 0.35 },
         { transform: `translate(0, 0) scale(${scale})` },
       ],
@@ -218,6 +218,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     card.animate([{ transform: `translate(${mx}px, ${my}px) scale(3.2)` }, { transform: 'translate(0, 0) scale(1)' }], { duration: 420, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.1)' });
   }
   reveal.classList.add('out');
+  field.classList.add('fade'); // 残ったカードは、薄くして、引いたカードを目立たせる
   slab.classList.remove('show');
   fx.replaceChildren();
   await sleep(280 * Math.max(k, 0.3));
