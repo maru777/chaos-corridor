@@ -1,10 +1,10 @@
 /* ===== 赤と黒の漫画（ペルソナ風）: メニューと、技一覧・あそびかた・CPU の強さ ===== */
 
 /* オープニングのメニュー: 赤地に、黒と白の、斜めの札のボタン */
-#opening[data-phase="menu"] { background: #d4001a; }
-#opening[data-phase="menu"]::before { content: ""; position: absolute; left: -10%; right: 20%; top: 62%; height: 70%; background: #05030f; clip-path: polygon(0 16%, 100% 0, 90% 100%, 0 100%); pointer-events: none; }
-#opening[data-phase="menu"]::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(5, 3, 15, 0.35) 1.6px, transparent 2.2px) 0 0 / 11px 11px; -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 55%); mask-image: linear-gradient(160deg, #000 0%, transparent 55%); pointer-events: none; }
-#opening[data-phase="menu"] .op-stage { z-index: 1; }
+#opening { background: #d4001a; }
+#opening::before { content: ""; position: absolute; left: -10%; right: 20%; top: 62%; height: 70%; background: #05030f; clip-path: polygon(0 16%, 100% 0, 90% 100%, 0 100%); pointer-events: none; }
+#opening::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(5, 3, 15, 0.35) 1.6px, transparent 2.2px) 0 0 / 11px 11px; -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 55%); mask-image: linear-gradient(160deg, #000 0%, transparent 55%); pointer-events: none; }
+#opening .op-stage { z-index: 1; }
 #opening[data-phase="menu"] .op-speed { opacity: 0.1; }
 .op-btn { position: relative; border: none; border-radius: 0; background: #05030f; color: #fff; box-shadow: 6px 6px 0 #fff; transform: skewX(-12deg); font-style: italic; min-width: 260px; transition: transform 90ms, box-shadow 90ms, background 90ms, color 90ms; }
 .op-btn:nth-child(even) { transform: skewX(-12deg) translateX(14px); }
@@ -22,3 +22,22 @@
 .level-btn { border-radius: 0; box-shadow: 5px 5px 0 #05030f; transform: skewX(-6deg); }
 .level-btn:active:not(:disabled) { transform: skewX(-6deg) translate(2px, 2px); box-shadow: 2px 2px 0 #05030f; }
 @media (prefers-reduced-motion: reduce) { .op-btn { transition: none; } }
+
+/* タイトルの位置は、「TAP TO START」から、メニューが出るまで、動かさない（メニューの場所を、最初から取っておく） */
+.op-menu { display: flex !important; visibility: hidden; height: 250px; justify-content: flex-start; margin-top: 18px; }
+#opening[data-phase="menu"] .op-menu { visibility: visible; }
+.op-tap { position: absolute; left: 0; right: 0; bottom: 120px; margin: 0; }
+#opening[data-phase="splash"] .op-tap { display: block; }
+
+/* CPU の強さ: 枠をなくし、左右から、シュッと出てくる */
+#levels .modal-box { background: transparent; border: 0; box-shadow: none; overflow: visible; width: min(420px, 100%); }
+#levels .modal-box > header { background: transparent; border: 0; justify-content: center; gap: 16px; }
+#levels .modal-box h2 { background: #fff; color: #05030f; padding: 2px 22px 4px; box-shadow: 5px 5px 0 #05030f; }
+#levels .modal-box > header button { position: absolute; top: -4px; right: 6px; }
+#levels .modal-body { background: transparent; overflow: visible; }
+#levels .levels-note { color: #fff; background: #05030f; display: inline-block; padding: 3px 12px; transform: skewX(-10deg); }
+#levels:not([hidden]) .level-btn { animation: lvl-in 380ms cubic-bezier(0.2, 1.2, 0.4, 1) calc(var(--i, 0) * 80ms + 80ms) both; }
+#levels:not([hidden]) .level-btn:nth-child(odd) { --from: -110vw; }
+#levels:not([hidden]) .level-btn:nth-child(even) { --from: 110vw; }
+@keyframes lvl-in { from { translate: var(--from) 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #levels:not([hidden]) .level-btn { animation: none; } }

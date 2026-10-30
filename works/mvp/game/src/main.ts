@@ -399,7 +399,7 @@ function refresh(): void {
     statusEl.textContent = `${NAMES[state.winner]}の勝ち`;
     statusEl.dataset.turn = String(state.winner);
   } else {
-    statusEl.textContent = `${NAMES[state.turn]}の番`;
+    statusEl.textContent = `${NAMES[state.turn]}の番${cpuSeat !== null && state.turn === cpuSeat ? '　CPU 考え中…' : ''}`;
     statusEl.dataset.turn = String(state.turn);
   }
   btnMove.setAttribute('aria-pressed', String(mode === 'move'));
@@ -735,7 +735,6 @@ function cpuTick(): void {
   const now = performance.now();
   if (cpuReadyAt === 0) {
     cpuReadyAt = now + 700;
-    say('CPU が考えている…');
     return;
   }
   if (now < cpuReadyAt) return;

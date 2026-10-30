@@ -66,7 +66,11 @@ export interface SafeArea {
 
 export function safeArea(aspect: number): SafeArea {
   // 縦長（スマホ）: 左右はほぼいっぱい。上は、プレイヤーカード（約 13%）、下は、手札とボタン（約 30%）を避ける
-  if (aspect < 1) return { x: 1, top: 0.78, bottom: -0.44 };
+  if (aspect < 1) {
+    // 縦長が、ゆるやか（タブレット）になるほど、上の表示が高くなり、下には、余裕ができる。縦長の度合いで、上限・下限をなめらかに変える
+    const t = Math.min(1, Math.max(0, (aspect - 0.46) / 0.4));
+    return { x: 1, top: 0.74 - t * 0.14, bottom: -0.44 - t * 0.3 };
+  }
   // 横長（パソコン）: プレイヤーカードは左右の隅にあるので、上は高く使える。下は、ボタン。手札は左下にあるので、横幅を絞る
   return { x: 0.62, top: 0.8, bottom: -0.86 };
 }

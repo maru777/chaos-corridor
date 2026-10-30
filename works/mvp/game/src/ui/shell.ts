@@ -49,6 +49,7 @@ export function createShell(opts: ShellOptions): Shell {
     const b = document.createElement('button');
     b.className = 'level-btn';
     b.dataset['level'] = String(l);
+    b.style.setProperty('--i', String(l - 1));
     const n = document.createElement('strong');
     n.textContent = levelStars(l);
     const t = document.createElement('small');
