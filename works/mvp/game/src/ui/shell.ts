@@ -63,10 +63,19 @@ export function createShell(opts: ShellOptions): Shell {
     b.className = 'level-btn';
     b.dataset['level'] = String(l);
     b.style.setProperty('--i', String(l - 1));
+    // 名前を大きく、星はその下に（塗った星は金色、空の星は輪郭だけ）
     const n = document.createElement('strong');
-    n.textContent = levelStars(l);
-    const t = document.createElement('small');
-    t.textContent = LEVEL_NAMES[l - 1] ?? '';
+    n.textContent = LEVEL_NAMES[l - 1] ?? '';
+    const t = document.createElement('span');
+    t.className = 'level-stars';
+    t.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < CPU_LEVELS; i++) {
+      const star = document.createElement('i');
+      star.className = i < l ? 'star on' : 'star';
+      star.textContent = '★';
+      t.appendChild(star);
+    }
+    b.setAttribute('aria-label', `${LEVEL_NAMES[l - 1] ?? ''}。${levelStars(l)}`);
     b.append(n, t);
     b.addEventListener('click', () => {
       begin({ vs: 'cpu', level: l, attacks: attacksBox.checked });

@@ -423,8 +423,8 @@ type AttackPatch = Partial<
 export function attackOutcome(state: GameState, action: AttackAction): { error?: string; patch?: AttackPatch } {
   const me = state.turn;
   const foe = otherPlayer(me);
-  if (state.attacks[me] !== action.id) return { error: 'その攻撃技を持っていない' };
-  if (state.attackUsed[me]) return { error: 'その攻撃技は使い終わっている' };
+  if (state.attacks[me] !== action.id) return { error: 'その WEAPON を持っていない' };
+  if (state.attackUsed[me]) return { error: 'その WEAPON は使い終わっている' };
   if (state.sealed[me]) return { error: '封印されていて、使えない' };
   const skip: [number, number] = [state.skip[0], state.skip[1]];
   switch (action.id) {
@@ -819,7 +819,7 @@ function applyCore(state: GameState, action: Action): ApplyResult {
 
     case 'void': {
       const target = voidTargets(state).find((w) => sameWall(w, action.wall));
-      if (!target) return { ok: false, reason: '消せる壁がない（鉄壁は消せない）' };
+      if (!target) return { ok: false, reason: '消せる壁がない。鉄壁は消せない' };
       giveBack(target, wallsLeft, shortWalls);
       return done({ walls: state.walls.filter((w) => w !== target), wallsLeft, shortWalls, abilities });
     }

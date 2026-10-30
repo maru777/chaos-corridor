@@ -19,13 +19,13 @@ export const ATTACKS: readonly AttackDef[] = [
     id: 'atkMeteor',
     name: '終焉の隕石',
     reading: 'Doom Meteor',
-    text: '効果：盤全体のランダムな 1 マスに隕石を落とす。そのマスに触れている壁と罠を壊す。コマがいれば、そのコマは 1 回休み（自分のコマでも）。空きマスなら、隕石が残って 3 回動くまで通れない。\n手番：使う。\n制約：落ちる場所は、ゴールへの道を完全にふさがないマスから選ばれる。',
+    text: '効果：盤全体のランダムな 1 マスに隕石を落とす。そのマスに触れている壁と罠を壊す。コマがいれば、そのコマは 1 回休み。自分のコマでも休む。空きマスなら、隕石が残って 3 回動くまで通れない。\n手番：使う。\n制約：落ちる場所は、ゴールへの道を完全にふさがないマスから選ばれる。',
   },
   {
     id: 'atkLaser',
     name: '貫光の裁き',
     reading: 'Piercing Laser',
-    text: '効果：横一列か縦一列を選んで撃つ。その列にある壁・隕石・罠を、最大 3 つ壊す（相手の物から先に）。コマには当たらない。\n手番：使う。\n制約：その列に壊せる物があること。鉄壁は壊れない。',
+    text: '効果：横一列か縦一列を選んで撃つ。その列にある壁・隕石・罠を、最大 3 つ壊す。相手の物から先に壊れる。コマには当たらない。\n手番：使う。\n制約：その列に壊せる物があること。鉄壁は壊れない。',
   },
   {
     id: 'atkShock',
@@ -67,7 +67,7 @@ export const ATTACKS: readonly AttackDef[] = [
     id: 'atkGale',
     name: '烈風の怒涛',
     reading: 'Raging Gale',
-    text: '効果：相手のコマを、ゴールと反対の向きに、最大 2 マス吹き飛ばす（壁・コマ・障害物の手前で止まる）。\n手番：使う。\n制約：相手がゴール行にいないこと。1 マス以上動かせること。',
+    text: '効果：相手のコマを、ゴールと反対の向きに、最大 2 マス吹き飛ばす。壁・コマ・障害物の手前で止まる。\n手番：使う。\n制約：相手がゴール行にいないこと。1 マス以上動かせること。',
   },
   {
     id: 'atkMines',
@@ -79,7 +79,7 @@ export const ATTACKS: readonly AttackDef[] = [
 
 export function attackDef(id: AttackId): AttackDef {
   const def = ATTACKS.find((a) => a.id === id);
-  if (!def) throw new Error(`未定義の攻撃技: ${id}`);
+  if (!def) throw new Error(`未定義の WEAPON: ${id}`);
   return def;
 }
 

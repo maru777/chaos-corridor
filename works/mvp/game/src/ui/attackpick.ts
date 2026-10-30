@@ -27,7 +27,7 @@ export function pickAttack(offers: readonly AttackId[], beforeStart: () => Promi
   }
   const title = document.createElement('p');
   title.className = 'toss-title ap-title';
-  title.textContent = '攻撃技を選ぶ（お互いに、公開で持つ）';
+  title.textContent = 'WEAPON を選ぶ';
   const row = document.createElement('div');
   row.className = 'ap-row';
   const desc = document.createElement('div');

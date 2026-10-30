@@ -93,7 +93,7 @@ const TRAP_TEXT: Readonly<Record<TrapKind, string>> = {
   back: '罠だ！ 元のマスに戻された',
   shove: '罠だ！ 飛ばされた',
   confiscate: '罠だ！ 壁を 1 枚失った',
-  seal: '罠だ！ 次の手番、Skill と攻撃技が使えない',
+  seal: '罠だ！ 次の手番、Skill と WEAPON が使えない',
 };
 
 function el<T extends HTMLElement>(id: string): T {
@@ -312,10 +312,10 @@ function attackCard(id: AttackId, seat: PlayerId): HTMLButtonElement {
   const b = document.createElement('button');
   b.className = 'acard legendary attack';
   b.setAttribute('aria-pressed', String(armedAttack || mode === 'atkLaser' || mode === 'atkBomb'));
-  b.setAttribute('aria-label', `攻撃技 ${def.name}。${def.text}`);
+  b.setAttribute('aria-label', `WEAPON ${def.name}。${def.text}`);
   const rar = document.createElement('span');
   rar.className = 'acard-rar';
-  rar.textContent = 'ATTACK';
+  rar.textContent = 'WEAPON';
   const plate = document.createElement('span');
   plate.className = 'acard-plate';
   plate.innerHTML = attackIconSvg(id); // アイコンは、コードで作った SVG（外部の入力ではない）
@@ -509,7 +509,7 @@ function renderPlayerCards(): void {
       name.textContent = attackDef(atk).name;
       chip.appendChild(name);
       chip.title = attackDef(atk).text;
-      row.append(div('pchip', 'ATTACK'), chip);
+      row.append(div('pchip', 'WEAPON'), chip);
       card.appendChild(row);
     }
   }
@@ -577,7 +577,7 @@ function useAttack(id: AttackId): void {
       say('');
     } else {
       mode = id;
-      say(id === 'atkLaser' ? '撃つ列のマスを選ぶ（「向き」ボタンで、横一列 / 縦一列）' : '爆撃の中心のマスを選ぶ');
+      say(id === 'atkLaser' ? '撃つ列のマスを選ぶ。向きボタンで、横一列と縦一列を切り替え' : '爆撃の中心のマスを選ぶ');
     }
     refresh();
     return;
@@ -629,7 +629,7 @@ function refresh(): void {
   btnRotate.textContent = mode === 'atkLaser' ? `レーザーの向き: ${orient === 'h' ? '横一列' : '縦一列'}` : `壁の向き: ${orient === 'h' ? '横' : '縦'}`;
   // 短い壁を持っているときだけ、壁の長さを切り替えるボタンを出す
   btnLength.hidden = !(state.winner === null && state.shortWalls[state.turn] > 0);
-  btnLength.textContent = `壁の長さ: ${shortMode ? '短（1マス）' : '長（2マス）'}`;
+  btnLength.textContent = `壁の長さ: ${shortMode ? '短 1マス' : '長 2マス'}`;
   btnUndo.disabled = log.length === 0;
   hashEl.hidden = !params.has('debug');
   hashEl.textContent = `状態 ${stateHash(state)}　種 ${seed}　${log.length} 手`;
@@ -808,7 +808,7 @@ function chooseNovaFirst(cell: Pos): void {
   }
   novaFirst = cell;
   mode = 'nova2';
-  say('2 回目の行き先を選ぶ（1 回目のマスをもう一度押すと、選び直す）');
+  say('2 回目の行き先を選ぶ。1 回目のマスをもう一度押すと選び直し');
   refresh();
 }
 
@@ -834,7 +834,7 @@ function chooseTrapCell(cell: Pos): void {
   }
   trapCell = cell;
   mode = 'trapShove2';
-  say('飛ばす向きを選ぶ（光っている隣のマス。罠のマスをもう一度押すと、選び直す）');
+  say('飛ばす向きを選ぶ。光っている隣のマスを押す。罠のマスをもう一度押すと選び直し');
   refresh();
 }
 
@@ -910,7 +910,7 @@ btnLength.addEventListener('click', () => {
   if (locked()) return;
   shortMode = !shortMode;
   mode = 'wall'; // 長さを選ぶのは、壁を置くとき
-  say(shortMode ? '短い壁（1 マス分）で置く' : '');
+  say(shortMode ? '短い壁で置く。1 マス分' : '');
   refresh();
 });
 btnUndo.addEventListener('click', () => {
@@ -1035,7 +1035,7 @@ function debugFoeSkill(): void {
   const asFoe: GameState = { ...state, turn: foe };
   const acts = legalActions(asFoe).filter((a) => a.type === 'ability');
   if (acts.length === 0) {
-    say('相手が、いま使える Skill がない（もう使い切った、または、制約に合わない）');
+    say('相手が、いま使える Skill がない。使い切ったか、制約に合わない');
     return;
   }
   const act = acts[Math.floor(Math.random() * acts.length)] as Action;
@@ -1119,7 +1119,7 @@ function buildDebugPanel(): void {
     ['勝ち画面', sampleResult(true)],
     ['負け画面', sampleResult(false)],
   ]);
-  const foeRow = mkRow([['相手が Skill を使う（本物の手札から）', debugFoeSkill]]);
+  const foeRow = mkRow([['相手が Skill を使う。本物の手札から', debugFoeSkill]]);
   const forceRow = mkRow([
     ['自分が勝った状態', () => forceWinner(true)],
     ['自分が負けた状態', () => forceWinner(false)],
@@ -1129,9 +1129,9 @@ function buildDebugPanel(): void {
     ['+10,000 G', () => debugGold(10000)],
     ['Gold を 0 に', () => debugGold(-wallet.gold)],
   ]);
-  panel.append(title('カットインを試す（何回でも）'), previewRow, title('実際の Skill で使うときの演出'), select, label, labelAll);
-  panel.append(title('コイントス'), tossRow, title('Skill を引く演出（レア度ごと）'), drawRow, title('結果の画面（見た目だけ）'), resultRow);
-  panel.append(title('相手が Skill を使ったときの表示'), foeRow, title('勝敗を、いまの対局につける（CPU 戦で、結果・Gold まで）'), forceRow, title('Gold'), goldRow);
+  panel.append(title('カットインを試す。何回でも'), previewRow, title('実際の Skill で使うときの演出'), select, label, labelAll);
+  panel.append(title('コイントス'), tossRow, title('Skill を引く演出。レア度ごと'), drawRow, title('結果の画面。見た目だけ'), resultRow);
+  panel.append(title('相手が Skill を使ったときの表示'), foeRow, title('勝敗を、いまの対局につける。CPU 戦で、結果と Gold まで'), forceRow, title('Gold'), goldRow);
 
   const toggle = (open: boolean) => {
     panel.hidden = !open;
