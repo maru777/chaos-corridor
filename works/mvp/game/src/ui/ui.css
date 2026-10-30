@@ -301,3 +301,9 @@
 /* カードごとの残り回数 */
 .acard .acard-left { margin-top: 1px; padding: 0 9px; border-radius: 99px; background: var(--ink2); color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; white-space: nowrap; }
 .acard.spent .acard-left { background: #444; color: #bbb; }
+
+/* 技の説明（効果・手番・条件）は、行ごとに改行して、左そろえ */
+#hand-desc { white-space: pre-line; text-align: left; max-width: min(92vw, 380px); }
+.codex-text { white-space: pre-line; }
+/* 使った技は、表向きで、少し暗く見せる（相手が使ったカードも見える） */
+.pcard .mini-card.used { filter: grayscale(0.6) brightness(0.85); outline: 2px solid var(--ink2); }

@@ -34,21 +34,21 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '幻影の斜閃',
     reading: 'Phantom Slash',
     rarity: 'UNCOMMON',
-    text: '斜めに 1 マス動く（手番を使う）',
+    text: '斜めに 1 マス動く。\n手番: 使う（動いたら相手の番）。\n条件: 斜めの先が盤の内で、相手のコマ・隕石がないこと。横→縦、または縦→横の道のどちらかに、壁・相手のコマ・隕石がないこと。',
   },
   {
     id: 'reclaim',
     name: '煉獄の回帰',
     reading: 'Crimson Recall',
     rarity: 'UNCOMMON',
-    text: '置いた自分の壁を 1 枚戻す。鉄壁は戻せない（手番を使う）',
+    text: '盤上の自分の壁を 1 枚、手元に戻す。\n手番: 使う。\n条件: 自分が置いた壁があること。鉄壁は戻せない。',
   },
   {
     id: 'jam',
     name: '静寂の電牢',
     reading: 'Silent Cage',
     rarity: 'UNCOMMON',
-    text: '相手の次の手番では、壁を置けなくする（手番を使う）',
+    text: '相手が次の番に、壁を置けなくする（動くことだけできる）。\n手番: 使う。\n条件: 相手が、すでに壁を封じられていないこと。',
   },
   // ---- RARE ----
   {
@@ -56,21 +56,21 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '蒼穹の跳躍',
     reading: 'Azure Leap',
     rarity: 'RARE',
-    text: '壁を越えて、まっすぐ 2 マス先へ跳ぶ（手番を使う）',
+    text: '壁・コマ・隕石を飛び越えて、上下左右のどれかへ、まっすぐ 2 マス先へ跳ぶ。\n手番: 使う。\n条件: 着地するマスが盤の内で、相手のコマも隕石もないこと。',
   },
   {
     id: 'meteor',
     name: '災厄の流星',
     reading: 'Calamity Meteor',
     rarity: 'RARE',
-    text: '相手の前のマスに隕石を落とし、相手が 3 回動くまで、そのマスを通行不可にする（手番を使う）',
+    text: '相手のコマの、ゴール側のすぐ前のマスに隕石を落とす。相手が 3 回動くまで、そのマスは通れない。\n手番: 使う。\n条件: 相手がゴール行にいないこと。そのマスに、自分のコマも隕石もないこと。落としても、どちらにもゴールへの道が残ること。',
   },
   {
     id: 'aegis',
     name: '不滅の城壁',
     reading: 'Eternal Aegis',
     rarity: 'RARE',
-    text: '自分の壁 1 枚を鉄壁にする。虚無で消されず、回収でも戻せなくなる（手番を使う）',
+    text: '盤上の自分の壁 1 枚を鉄壁にする。虚無で消されず、回収でも戻せなくなる。\n手番: 使う。\n条件: 鉄壁でない自分の壁があること。',
   },
   // ---- EPIC ----
   {
@@ -78,35 +78,35 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '星爆の連舞',
     reading: 'Nova Waltz',
     rarity: 'EPIC',
-    text: '1 手番に 2 回動く（手番を使う）',
+    text: '1 手番に、ふつうの動きを 2 回する。1 回目でゴールに着けば、その時点で勝ち。\n手番: 使う（2 回動いて、相手の番）。\n条件: 1 回目も 2 回目も、ふつうに動ける先であること。',
   },
   {
     id: 'void',
     name: '虚無の断罪',
     reading: 'Void Judgment',
     rarity: 'EPIC',
-    text: '盤上の壁 1 枚を消す。消した壁は、持ち主の手元に戻る。鉄壁は消せない（手番を使う）',
+    text: '盤上の壁を 1 枚消す（相手の壁も、自分の壁も）。消した壁は、持ち主の手元に戻る。\n手番: 使う。\n条件: 鉄壁でない壁があること。',
   },
   {
     id: 'gravity',
     name: '重力の鎖',
     reading: 'Gravity Chain',
     rarity: 'EPIC',
-    text: '相手のコマを、ゴールと反対の向きに 1 マス引き戻す。壁・端・コマ・隕石があると使えない（手番を使う）',
+    text: '相手のコマを、ゴールと反対の向きに 1 マス引き戻す。\n手番: 使う。\n条件: 相手がゴール行にいないこと。引き戻す先が盤の内で、壁・自分のコマ・隕石がないこと。',
   },
   {
     id: 'stasis',
     name: '氷刻の静止',
     reading: 'Frozen Time',
     rarity: 'EPIC',
-    text: '相手を 1 手番休ませる。続けて自分がもう一度動く（手番を使う）',
+    text: '相手を 1 手番休ませる。\n手番: 技そのものは手番を使わず、続けて自分がもう一度動ける。\n条件: いつでも使える。',
   },
   {
     id: 'triwall',
     name: '三重の結界',
     reading: 'Triple Barrier',
     rarity: 'EPIC',
-    text: '1 マス分の短い壁を、3 枚置けるようになる。壁を置くときに、短い壁を選べる（手番を使う）',
+    text: '1 マス分の短い壁を、3 枚置けるようになる。壁を置くときに、短い壁を選べる。\n手番: 使う（この手番には、壁は置かない）。\n条件: いつでも使える。',
   },
   // ---- LEGENDARY ----
   {
@@ -114,14 +114,14 @@ export const ABILITIES: readonly AbilityDef[] = [
     name: '混沌の創世',
     reading: 'Chaos Genesis',
     rarity: 'LEGENDARY',
-    text: '盤上の壁（鉄壁以外）を、すべてランダムに置き直す。どちらのコマにも、ゴールへの道は残る（手番を使う）',
+    text: '盤上の壁（鉄壁以外）を、すべてランダムに置き直す。どちらにも、ゴールへの道は残る。\n手番: 使う。\n条件: 鉄壁でない壁が 1 枚以上あること。',
   },
   {
     id: 'invert',
     name: '天地の逆転',
     reading: 'Inverted World',
     rarity: 'LEGENDARY',
-    text: '盤を 180 度回す。壁と隕石は反転し、コマは、位置を入れ替える（手番を使う）',
+    text: '盤を 180 度回す。壁と隕石は反転し、コマは位置を入れ替える。\n手番: 使う。\n条件: いつでも使える。',
   },
 ];
 

@@ -30,7 +30,7 @@ import './ui/scenes.css';
 import './ui/persona.css';
 import './ui/shop.css';
 import './ui/result.css';
-import { handCount, visibleCards } from './ui/hand';
+import { visibleCards } from './ui/hand';
 import { abilityIconSvg } from './ui/icons';
 import type { MatchChoice } from './ui/opening';
 import { createShell } from './ui/shell';
@@ -297,7 +297,7 @@ function renderHand(): void {
     // 残り回数は、カードごとに書く（1 枚は、1 局に 1 回）
     const leftTag = document.createElement('span');
     leftTag.className = 'acard-left';
-    leftTag.textContent = spent.has(i) ? '残り 0 回' : '残り 1 回';
+    leftTag.textContent = spent.has(i) ? '残り 0/1' : '残り 1/1';
     b.append(rar, plate, name, reading, leftTag);
     // 今は使えない技（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
     if (spent.has(i)) {
@@ -312,6 +312,12 @@ function renderHand(): void {
     b.addEventListener('pointerdown', showDesc);
     b.addEventListener('mouseenter', showDesc);
     b.addEventListener('focus', showDesc);
+    // カーソルが外れたら、説明は消す
+    const hideDesc = () => {
+      handDescEl.textContent = '';
+    };
+    b.addEventListener('mouseleave', hideDesc);
+    b.addEventListener('blur', hideDesc);
     b.addEventListener('click', () => {
       if (locked()) return;
       if (armedAbility === id) {
@@ -351,10 +357,20 @@ function renderPlayerCards(): void {
     const hand = div('prow');
     hand.append(document.createTextNode('手札'));
     // 相手の手札は、枚数だけ（デバッグのときだけ、中身も）
-    const shown = visibleCards(state, p, false, debugShowAll);
-    if (shown !== null) for (const id of shown) hand.appendChild(miniCard(id));
-    else for (let i = 0; i < handCount(state, p); i++) hand.appendChild(div('mini-back'));
-    if (handCount(state, p) === 0) hand.appendChild(document.createTextNode('なし'));
+    // 使った技は、表向きで見える（相手が使ったカードも）。使うまでは、裏向き
+    const dealt = newGame(seed).abilities[p];
+    const rest = [...state.abilities[p]];
+    for (const id of dealt) {
+      const at = rest.indexOf(id);
+      if (at >= 0) {
+        rest.splice(at, 1);
+        hand.appendChild(debugShowAll ? miniCard(id) : div('mini-back'));
+      } else {
+        const used = miniCard(id);
+        used.classList.add('used');
+        hand.appendChild(used);
+      }
+    }
     card.appendChild(hand);
   }
 }
