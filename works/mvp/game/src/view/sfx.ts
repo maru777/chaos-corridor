@@ -207,6 +207,83 @@ export function playThudSfx(step: number): void {
   whoosh(c, master, 500, 90, t, 0.1, 0.6);
 }
 
+/**
+ * コイントスの音: はじく「チィン」→ 回っている間の、金属のきらめき → 落ちて、跳ねる「チン、チン」→ 止まる。
+ * 時間は、画面の動き（CSS の coin-toss: 落ちるのが 78%、跳ねるのが 87%・94%）に合わせる。
+ */
+export function playCoinSfx(spinMs: number): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.3;
+  master.connect(bus(c));
+  const t0 = c.currentTime + 0.01;
+  const ring = (start: number, f: number, vol: number, dur: number) => {
+    // 金属は、整数倍でない成分（非整数倍音）が混ざるので、チンと鳴る
+    for (const [m, v] of [[1, 1], [2.76, 0.5], [5.4, 0.28], [8.9, 0.15]] as const) tone(c, master, 'sine', f * m, f * m * 0.995, start, dur / (1 + m * 0.18), vol * v);
+  };
+  ring(t0, 2400, 0.55, 0.7);
+  whoosh(c, master, 800, 5200, t0, 0.18, 0.35);
+  // 回っている間の、さらさらしたきらめき
+  const spin = spinMs / 1000;
+  for (let i = 0; i < 22; i++) {
+    const t = t0 + 0.1 + (i / 22) * spin * 0.62;
+    tone(c, master, 'sine', 3200 + (i % 5) * 380, 3000 + (i % 5) * 300, t, 0.07, 0.07 * (1 - i / 30));
+  }
+  ring(t0 + spin * 0.78, 1900, 0.5, 0.55);
+  ring(t0 + spin * 0.87, 2100, 0.3, 0.35);
+  ring(t0 + spin * 0.94, 2300, 0.18, 0.25);
+  tone(c, master, 'sine', 120, 55, t0 + spin * 0.78, 0.18, 0.4);
+}
+
+/** コイントスの結果が出る瞬間: 「ドン！」と、きらめき */
+export function playTossResultSfx(): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.32;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.005;
+  whoosh(c, master, 400, 6000, t, 0.12, 0.5);
+  tone(c, master, 'sine', 160, 45, t + 0.08, 0.5, 1.0);
+  thunderHit(c, master, t + 0.08, 0.6);
+  [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6].forEach((f, i) => tone(c, master, 'triangle', f, f, t + 0.12 + i * 0.07, 0.6, 0.22));
+}
+
+/**
+ * 大量のカードが降って、積もる音。landingsMs は、カードごとの、落ちて着く時間（ミリ秒）。
+ * 着くたびに、紙を打つ短い音（高さと強さは、ばらばら）。最初に、降ってくる風の音。
+ */
+export function playCardRainSfx(landingsMs: readonly number[]): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.22;
+  master.connect(bus(c));
+  const t0 = c.currentTime + 0.01;
+  const last = Math.max(0, ...landingsMs) / 1000;
+  whoosh(c, master, 600, 2600, t0, Math.max(0.3, last * 0.8), 0.28);
+  for (const ms of landingsMs) {
+    const t = t0 + ms / 1000;
+    const f = 1100 + Math.random() * 2400;
+    // 紙がぱしっと当たる音（高めのノイズ）と、軽く沈む音
+    whoosh(c, master, f * 1.5, f * 0.6, t, 0.05, 0.22 + Math.random() * 0.2);
+    tone(c, master, 'sine', 220 + Math.random() * 90, 120, t, 0.06, 0.14);
+  }
+}
+
+/** ダーツが飛ぶ音: 風を切って、上がる */
+export function playDartSfx(durMs: number): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.3;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.005;
+  whoosh(c, master, 500, 5200, t, Math.max(0.15, durMs / 1000), 0.6);
+  tone(c, master, 'triangle', 300, 1400, t, Math.max(0.15, durMs / 1000), 0.12);
+}
+
 /** タイトルのロゴが「ドン!!」と落ちる音: 風を切る音 → 重い衝撃 → 長い和音ときらめき */
 export function playTitleSfx(): void {
   const c = getContext();

@@ -1,3 +1,4 @@
+import { playCoinSfx, playTossResultSfx } from '../view/sfx';
 /** コイントスの画面。結果（誰が先手か）は、呼ぶ側が先に決めておく。ここは、見せるだけ */
 
 export interface TossView {
@@ -65,6 +66,7 @@ export function showToss(view: TossView, beforeStart: () => Promise<void> = () =
     () =>
       new Promise<() => void>((resolve) => {
   root.classList.add('enter');
+  if (!reduce) window.setTimeout(() => playCoinSfx(SPIN_MS), 160); // コインが落ちてくる動きに合わせて、はじく音から
   void coin.offsetWidth; // 回転のやり直しのため、再描画させる
   for (const e of parts) e.classList.add('spin');
 
@@ -81,6 +83,7 @@ export function showToss(view: TossView, beforeStart: () => Promise<void> = () =
     const reveal = () => {
       if (revealed) return;
       revealed = true;
+      playTossResultSfx();
       fillResult(result, view);
       result.classList.add('show');
       root.classList.add('flash');

@@ -2,7 +2,7 @@ import { abilityDef } from '../abilities';
 import type { Rarity } from '../abilities';
 import type { AbilityId } from '../types';
 import { createRng } from '../rng';
-import { playSfx, playWallSfx } from '../view/sfx';
+import { playCardRainSfx, playDartSfx, playSfx, playWallSfx } from '../view/sfx';
 import { shout } from '../view/voice';
 import { drawTiming, planDraw } from './drawplan';
 import { abilityIconSvg } from './icons';
@@ -113,6 +113,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     field.appendChild(d);
     return d;
   });
+  playCardRainSfx(plan.cards.map((c) => (c.delay + c.fall) * Math.max(k, 0.4)));
   await sleep(t.rainMs * k);
 
   // 2. 好きなカードをタップする（結果は、どれを選んでも、種で先に決まっている）。ダーツが飛んで、そのカードに刺さる
@@ -134,6 +135,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   const cy = tr.top + tr.height / 2 - fr.top;
   const dart = el('div', 'ddart');
   dart.innerHTML = DART_SVG;
+  playDartSfx(t.dartMs * k);
   field.appendChild(dart);
   const startX = cx + (cx < fr.width / 2 ? -1 : 1) * fr.width * 0.28;
   const startY = fr.height + 140;

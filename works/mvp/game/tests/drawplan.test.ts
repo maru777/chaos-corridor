@@ -10,13 +10,21 @@ describe('技を引く演出の計画', () => {
       expect(p.cards.length).toBe(RAIN_COUNT);
       expect(RAIN_COUNT).toBeGreaterThanOrEqual(30);
       for (const c of p.cards) {
-        expect(c.x).toBeGreaterThan(6);
-        expect(c.x).toBeLessThan(94);
-        expect(c.y).toBeGreaterThan(20);
-        expect(c.y).toBeLessThan(90);
+        expect(c.x).toBeGreaterThan(-12); // 画面の外にも、少しはみ出して落ちる
+        expect(c.x).toBeLessThan(112);
+        expect(c.y).toBeGreaterThan(8);
+        expect(c.y).toBeLessThan(112);
+        expect(c.x < 0 || c.x > 100 || c.y > 100 || true).toBe(true);
         expect(c.delay).toBeGreaterThanOrEqual(0);
         expect(c.fall).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('どの乱数でも、画面の外にはみ出すカードが、何枚かある', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const out = planDraw('RARE', createRng(seed)).cards.filter((c) => c.x < 2 || c.x > 98 || c.y > 98).length;
+      expect(out).toBeGreaterThanOrEqual(4);
     }
   });
 

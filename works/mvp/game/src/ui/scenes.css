@@ -89,7 +89,7 @@
 @media (prefers-reduced-motion: reduce) { .dcard, .dspark, .dring, .dbolt, .dwhite, .dpillar, .drays, .dconfetti, #draw.shake .draw-field, .dcard.trembling { animation: none !important; } .dconfetti, .dpillar, .drays { display: none; } }
 
 /* 大量に降ってくる → 好きなカードをタップ。引いたカードは、上に置きっぱなし */
-.dcard { width: 112px; margin: -78px 0 0 -56px; }
+.dcard { width: 96px; margin: -67px 0 0 -48px; }
 .dcard.pickable { cursor: pointer; }
 .dcard.pickable:hover, .dcard.pickable:active { z-index: 4; filter: brightness(1.5); translate: 0 -6px; }
 .dcard.pickable .dback { border-color: #fff; }

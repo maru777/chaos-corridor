@@ -70,8 +70,9 @@ export function planDraw(rarity: Rarity, rng: () => number): DrawPlan {
     [cells[i], cells[j]] = [cells[j] as { c: number; r: number }, cells[i] as { c: number; r: number }];
   }
   const cards = cells.map((cell, i): RainCard => ({
-    x: 9 + (cell.c + 0.5) * (82 / cols) + (rng() - 0.5) * 5,
-    y: 24 + (cell.r + 0.5) * (62 / rows) + (rng() - 0.5) * 5,
+    // 画面の一回り外にも落ちる（はみ出して見える）
+    x: -8 + (cell.c + 0.5) * (116 / cols) + (rng() - 0.5) * 6,
+    y: 14 + (cell.r + 0.5) * (92 / rows) + (rng() - 0.5) * 6,
     rot: Math.round((rng() - 0.5) * 60),
     delay: Math.round(i * 28 + rng() * 40),
     fall: Math.round(420 + rng() * 200),
