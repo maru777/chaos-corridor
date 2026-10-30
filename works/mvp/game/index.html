@@ -68,9 +68,10 @@
       .cutin-reading { font-size: min(calc(var(--name-size) * 0.38), calc(92vw / (var(--rchars, 14) * 0.95))); letter-spacing: 0.3em; color: #eef3ff; -webkit-text-stroke: 0.2em rgba(0, 0, 0, 0.5); paint-order: stroke fill; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); animation: cutin-name-pop 320ms ease-out calc(var(--impact) - 120ms) both; }
 
       /* 漫画の演出: 集中線・網点（ハーフトーン）・擬音の爆発 */
-      .cutin-speed { position: absolute; inset: -25%; opacity: 0; --lines: color-mix(in srgb, var(--rc) 35%, #fff);
-        background: repeating-conic-gradient(from 0deg at 50% 46%, var(--lines) 0 0.7deg, transparent 0.7deg 3.4deg);
-        -webkit-mask: radial-gradient(circle at 50% 46%, transparent 16%, #000 60%); mask: radial-gradient(circle at 50% 46%, transparent 16%, #000 60%);
+      /* 集中線は、画面より十分大きい正方形を、中心に置く（縦長の画面で、回したときに、端が切れないように） */
+      .cutin-speed { position: absolute; left: 50%; top: 46%; width: max(300vw, 300vh); height: max(300vw, 300vh); translate: -50% -50%; opacity: 0; --lines: color-mix(in srgb, var(--rc) 35%, #fff);
+        background: repeating-conic-gradient(from 0deg at 50% 50%, var(--lines) 0 0.7deg, transparent 0.7deg 3.4deg);
+        -webkit-mask: radial-gradient(circle at 50% 50%, transparent max(16vw, 16vh), #000 max(60vw, 60vh)); mask: radial-gradient(circle at 50% 50%, transparent max(16vw, 16vh), #000 max(60vw, 60vh));
         animation: cutin-speed 650ms steps(1, end) var(--delay) both; }
       .cutin-halftone { position: absolute; inset: 0; opacity: 0;
         background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 1.7px, transparent 2.3px) 0 0 / 10px 10px;

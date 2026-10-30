@@ -114,6 +114,7 @@ let keepAbilities = false;
 
 const view = new BoardView(el('stage'), state.size);
 view.setInsets(uiInsets);
+if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __view: view }); // 確認用（?debug のときだけ）
 function applySkin(): void {
   const s = currentSkin(wallet);
   view.setSkin(s.board, [s.piece.colors[0], s.piece.colors[1]]);
@@ -631,6 +632,7 @@ async function startMatch(choice: MatchChoice, closeMenu: () => void = () => und
   const first = tossFirst(seed);
   seatA = seatOfA(first);
   cpuSeat = vs === 'cpu' ? (seatA === 0 ? 1 : 0) : null;
+  view.setFlipped(cpuSeat !== null && seatA === 1); // 自分のコマが、いつも手前
   say('');
   refresh();
   if (animate) {

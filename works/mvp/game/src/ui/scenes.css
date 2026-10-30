@@ -38,16 +38,11 @@
 @keyframes ddart-wobble { 0% { transform: rotate(-9deg); } 30% { transform: rotate(7deg); } 60% { transform: rotate(-4deg); } 100% { transform: rotate(0); } }
 
 /* めくるカード */
-.dreveal { position: absolute; left: 50%; top: 44%; width: clamp(52px, 15vw, 74px); aspect-ratio: 5 / 7; margin: calc(clamp(52px, 15vw, 74px) * -0.7) 0 0 calc(clamp(52px, 15vw, 74px) / -2); z-index: 4; perspective: 600px; }
+.dreveal { position: absolute; left: 50%; top: 42%; width: 112px; height: 152px; margin: -76px 0 0 -56px; z-index: 4; perspective: 700px; }
 .dreveal.out { opacity: 0; transition: opacity 260ms; }
 .dreveal-in { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
 .dreveal-in > .dback, .dreveal-in > .draw-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-.dreveal-in > .draw-face { transform: rotateY(180deg); width: 100%; min-height: 0; height: 100%; padding: 2px; gap: 0; justify-content: center; overflow: hidden; border-width: 2px; }
-.dreveal-in .draw-face .acard-rar { font-size: 4px; padding: 0 3px; }
-.dreveal-in .draw-face .acard-plate { width: 44%; height: auto; aspect-ratio: 1; border-width: 1.5px; }
-.dreveal-in .draw-face .ability-icon { width: 80%; height: 80%; }
-.dreveal-in .draw-face strong { font-size: 6px; }
-.dreveal-in .draw-face small { display: block; font-size: 3.5px; }
+.dreveal-in > .draw-face { transform: rotateY(180deg); width: 100%; height: 100%; min-height: 0; }
 
 /* 技名の札 */
 .draw-name { position: absolute; left: 50%; bottom: 8%; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 2px; transform: translateX(-50%) rotate(-3deg); opacity: 0; pointer-events: none; }
@@ -100,12 +95,28 @@
 .dcard.pickable .dback { border-color: #fff; }
 .draw-title { top: 3%; }
 .draw-parked { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
-.dparked { position: absolute; top: 9%; width: clamp(54px, 15vw, 70px); aspect-ratio: 5 / 7; min-height: 0; padding: 2px; gap: 0; margin-left: calc(clamp(54px, 15vw, 70px) / -2); justify-content: center; overflow: hidden; border-width: 2px; }
-.dparked .acard-rar { font-size: 4px; padding: 0 3px; }
-.dparked .acard-plate { width: 44%; height: auto; aspect-ratio: 1; border-width: 1.5px; }
-.dparked .ability-icon { width: 80%; height: 80%; }
-.dparked strong { font-size: 6px; }
-.dparked small { display: block; font-size: 3.5px; }
+.dparked { position: absolute; top: 11%; width: 96px; min-height: 0; height: 128px; margin-left: -48px; padding: 4px 3px 5px; gap: 2px; justify-content: center; overflow: hidden; }
+.dparked .acard-rar { font-size: 9px; padding: 0 6px; }
+.dparked .acard-plate { width: 44px; height: 44px; }
+.dparked .ability-icon { width: 34px; height: 34px; }
+.dparked strong { font-size: 12px; }
+.dparked small { display: block; font-size: 8px; }
 .draw-prompt { position: absolute; left: 50%; bottom: 7%; z-index: 8; transform: translateX(-50%) rotate(-2deg) skewX(-12deg); padding: 5px 24px; background: #05030f; color: #fff; font-size: clamp(16px, 4.8vw, 24px); font-weight: 900; font-style: italic; box-shadow: 5px 5px 0 #fff; opacity: 0; white-space: nowrap; pointer-events: none; }
 .draw-prompt.show { opacity: 1; animation: res-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 .draw-name { bottom: 4%; }
+
+/* 派手に: 色つきの閃光、放射状の集中線、大きな擬音、カメラが押し込む動き */
+.dflash { position: absolute; inset: 0; background: radial-gradient(circle at var(--cx) var(--cy), #fff 0, var(--rc, #fff) 38%, transparent 75%); opacity: 0; animation: dflash 520ms ease-out both; }
+#draw[data-rarity="uncommon"] { --rc: #7fe0a0; }
+#draw[data-rarity="rare"] { --rc: #6aa8ff; }
+#draw[data-rarity="epic"] { --rc: #c58cff; }
+#draw[data-rarity="legendary"] { --rc: #ffd46a; }
+@keyframes dflash { 0% { opacity: 0.95; } 100% { opacity: 0; } }
+.dburstlines { position: absolute; left: calc(var(--cx) - max(150vw, 150vh)); top: calc(var(--cy) - max(150vw, 150vh)); width: max(300vw, 300vh); height: max(300vw, 300vh); background: repeating-conic-gradient(from 0deg at 50% 50%, color-mix(in srgb, var(--rc, #fff) 70%, #fff) 0 1.1deg, transparent 1.1deg 5deg); -webkit-mask: radial-gradient(circle at 50% 50%, transparent max(12vw, 12vh), #000 max(40vw, 40vh)); mask: radial-gradient(circle at 50% 50%, transparent max(12vw, 12vh), #000 max(40vw, 40vh)); opacity: 0; animation: dburstlines 900ms steps(1, end) both; }
+@keyframes dburstlines { 0% { opacity: 0.9; transform: rotate(0deg); } 30% { opacity: 0.75; transform: rotate(2deg); } 60% { opacity: 0.5; transform: rotate(-1.5deg); } 100% { opacity: 0; transform: rotate(0); } }
+.donomat { position: absolute; left: var(--cx); top: calc(var(--cy) - min(34vh, 230px)); transform: translate(-50%, -50%) rotate(-7deg); font-size: clamp(34px, 11vw, 64px); font-weight: 900; font-style: italic; white-space: nowrap; color: #fff; -webkit-text-stroke: 0.2em #05030f; paint-order: stroke fill; text-shadow: 0.07em 0.07em 0 var(--rc, #05030f); opacity: 0; animation: donomat 1100ms cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes donomat { 0% { opacity: 0; scale: 3; } 14% { opacity: 1; scale: 0.9; } 24% { scale: 1.1; } 36% { scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; scale: 1.05; } }
+.draw-field.punch { animation: dpunch 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes dpunch { 0% { scale: 1.12; } 100% { scale: 1; } }
+#draw[data-rarity="legendary"] .draw-field.punch { animation-duration: 700ms; }
+@media (prefers-reduced-motion: reduce) { .dflash, .dburstlines, .donomat, .draw-field.punch { animation: none !important; } .dflash, .dburstlines { display: none; } .donomat { opacity: 1; } }

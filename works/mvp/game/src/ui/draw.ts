@@ -39,9 +39,13 @@ function faceCard(id: AbilityId): HTMLElement {
 /** レア度ごとの、めくった瞬間の飾り（火花・衝撃・稲妻・光の柱・紙吹雪） */
 function burst(fx: HTMLElement, rarity: Rarity, cx: number, cy: number): void {
   const rng = createRng(rarity.length * 977 + 13);
-  const sparks = { UNCOMMON: 10, RARE: 16, EPIC: 24, LEGENDARY: 36 }[rarity];
+  const sparks = { UNCOMMON: 18, RARE: 28, EPIC: 42, LEGENDARY: 64 }[rarity];
   fx.style.setProperty('--cx', `${cx}px`);
   fx.style.setProperty('--cy', `${cy}px`);
+  // 全部のレア度に: 色つきの閃光、放射状の集中線、大きな擬音（派手に）
+  fx.append(el('i', 'dflash'), el('i', 'dburstlines'));
+  const word = { UNCOMMON: 'パァッ！', RARE: 'キィン！！', EPIC: 'ドゴォン！！', LEGENDARY: 'ズドォォォン！！！' }[rarity];
+  fx.appendChild(el('b', 'donomat', word));
   for (let i = 0; i < sparks; i++) {
     const s = el('i', 'dspark');
     const ang = (i / sparks) * Math.PI * 2 + rng() * 0.3;
@@ -52,7 +56,7 @@ function burst(fx: HTMLElement, rarity: Rarity, cx: number, cy: number): void {
     fx.appendChild(s);
   }
   if (rarity !== 'UNCOMMON') {
-    for (let i = 0; i < (rarity === 'RARE' ? 2 : 3); i++) {
+    for (let i = 0; i < (rarity === 'RARE' ? 3 : 4); i++) {
       const ring = el('i', 'dring');
       ring.style.setProperty('--rd', `${i * 120}ms`);
       fx.appendChild(ring);
@@ -69,9 +73,9 @@ function burst(fx: HTMLElement, rarity: Rarity, cx: number, cy: number): void {
     }
     fx.appendChild(bolts);
   }
-  if (rarity === 'LEGENDARY') {
-    fx.append(el('i', 'dpillar'), el('i', 'drays'), el('i', 'dwhite'));
-    for (let i = 0; i < 46; i++) {
+  if (rarity === 'EPIC' || rarity === 'LEGENDARY') {
+    if (rarity === 'LEGENDARY') fx.append(el('i', 'dpillar'), el('i', 'drays'), el('i', 'dwhite'));
+    for (let i = 0; i < (rarity === 'EPIC' ? 28 : 70); i++) {
       const c = el('i', 'dconfetti');
       c.style.setProperty('--fx', `${rng() * 100}%`);
       c.style.setProperty('--fd', `${rng() * 900}ms`);
@@ -92,6 +96,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   const fx = root.querySelector('.draw-fx') as HTMLElement;
   const title = root.querySelector('.draw-title') as HTMLElement;
   const slab = root.querySelector('.draw-name') as HTMLElement;
+  field.classList.remove('punch');
   field.replaceChildren();
   fx.replaceChildren();
   slab.replaceChildren();
@@ -171,12 +176,13 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   dart.style.visibility = 'hidden';
   root.classList.remove('build');
   burst(fx, rarity, fr.width / 2, fr.height * 0.44);
-  if (rarity !== 'UNCOMMON') root.classList.add('shake');
+  root.classList.add('shake');
+  field.classList.add('punch');
   if (!reduced()) {
-    const scale = { UNCOMMON: 1.7, RARE: 1.9, EPIC: 2.2, LEGENDARY: 2.5 }[rarity];
+    const scale = { UNCOMMON: 1.5, RARE: 1.65, EPIC: 1.85, LEGENDARY: 2.1 }[rarity];
     reveal.animate(
       [
-        { transform: `translate(${dx}px, ${dy}px) scale(1)` },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.45)` },
         { transform: `translate(${dx * 0.3}px, ${dy * 0.3 - 30}px) scale(${scale * 0.8})`, offset: 0.35 },
         { transform: `translate(0, 0) scale(${scale})` },
       ],
@@ -190,7 +196,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
     });
   } else {
     inner.style.transform = 'rotateY(180deg)';
-    reveal.style.transform = 'scale(1.7)';
+    reveal.style.transform = 'scale(1.5)';
   }
   await sleep(700 * Math.max(k, 0.3));
   // 技名の札

@@ -36,7 +36,7 @@
 #levels .modal-box > header button { position: absolute; top: -4px; right: 6px; }
 #levels .modal-body { background: transparent; overflow: visible; }
 #levels .levels-note { color: #fff; background: #05030f; display: inline-block; padding: 3px 12px; transform: skewX(-10deg); }
-#levels:not([hidden]) .level-btn { animation: lvl-in 380ms cubic-bezier(0.2, 1.2, 0.4, 1) calc(var(--i, 0) * 80ms + 80ms) both; }
+#levels:not([hidden]) .level-btn { animation: lvl-in 380ms cubic-bezier(0.2, 1.2, 0.4, 1) calc(var(--i, 0) * 170ms + 80ms) both; }
 #levels:not([hidden]) .level-btn:nth-child(odd) { --from: -110vw; }
 #levels:not([hidden]) .level-btn:nth-child(even) { --from: 110vw; }
 @keyframes lvl-in { from { translate: var(--from) 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }

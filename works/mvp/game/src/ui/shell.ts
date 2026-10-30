@@ -4,6 +4,7 @@ import { renderCodex } from './codex';
 import { SLAM_MS, menuItems, nextPhase } from './opening';
 import { CPU_LEVELS, LEVEL_NAMES, levelStars } from '../cpu';
 import type { MatchChoice, MenuItem, OpeningEvent, OpeningPhase } from './opening';
+import { playThudSfx } from '../view/sfx';
 import { RULES } from './rules';
 
 /**
@@ -109,6 +110,8 @@ export function createShell(opts: ShellOptions): Shell {
     if (m === codex) renderCodex(byId('codex-body'));
     if (m === shop) opts.renderShop();
     if (m === levels) {
+      // 札が出てくるたびに、低く「ダン！」と鳴らす（だんだん強く）
+      for (let i = 0; i < CPU_LEVELS; i++) window.setTimeout(() => !levels.hidden && playThudSfx(i), 80 + i * 170 + 200);
       // 強さの札の左右は、開くたびに、ばらばらにする
       for (const b of levelList.children) (b as HTMLElement).style.setProperty('--ox', `${Math.round(Math.random() * 20)}%`);
     }

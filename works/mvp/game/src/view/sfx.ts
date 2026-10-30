@@ -20,6 +20,39 @@ function getContext(): AudioContext | null {
   return ctx;
 }
 
+/**
+ * 全部の音が通る出口。軽い残響（リバーブ）と、音量をそろえる圧縮（コンプレッサー）で、ぺらぺらした合成音に、広がりと厚みを足す。
+ * 残響の素材は、減衰するノイズをコードで作る（音の素材ファイルは使わない）。
+ */
+let busNode: GainNode | null = null;
+
+function bus(c: AudioContext): GainNode {
+  if (busNode !== null) return busNode;
+  const input = c.createGain();
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -16;
+  comp.knee.value = 12;
+  comp.ratio.value = 5;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.2;
+  const reverb = c.createConvolver();
+  const len = Math.floor(c.sampleRate * 1.6);
+  const ir = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+  }
+  reverb.buffer = ir;
+  const wet = c.createGain();
+  wet.gain.value = 0.28;
+  input.connect(comp);
+  input.connect(reverb);
+  reverb.connect(wet).connect(comp);
+  comp.connect(c.destination);
+  busNode = input;
+  return input;
+}
+
 function getNoise(c: AudioContext): AudioBuffer {
   if (noiseBuffer === null) {
     noiseBuffer = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
@@ -31,17 +64,39 @@ function getNoise(c: AudioContext): AudioBuffer {
 
 /** 音の高さを変えながら鳴らす（周波数は from から to へ） */
 function tone(c: AudioContext, out: AudioNode, type: OscillatorType, from: number, to: number, start: number, dur: number, vol: number): void {
-  const osc = c.createOscillator();
   const gain = c.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(from, start);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(to, 1), start + dur);
   gain.gain.setValueAtTime(0.0001, start);
   gain.gain.exponentialRampToValueAtTime(vol, start + Math.min(0.03, dur / 4));
   gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain).connect(out);
-  osc.start(start);
-  osc.stop(start + dur + 0.05);
+  // 角のある波（のこぎり・矩形）は、高い成分をやわらげて、耳に刺さらないようにする
+  const filter = c.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(type === 'sine' ? 12000 : Math.min(9000, Math.max(from, to) * 7), start);
+  filter.frequency.exponentialRampToValueAtTime(type === 'sine' ? 12000 : Math.max(500, Math.min(from, to) * 4), start + dur);
+  filter.connect(gain).connect(out);
+  // 少しずらした 2 つの音を重ねて、厚みを出す（コーラス）。高い音の 2 倍の成分も、少し足す
+  const layers: { detune: number; gain: number; mult: number; type: OscillatorType }[] =
+    type === 'sine'
+      ? [
+          { detune: 0, gain: 1, mult: 1, type },
+          { detune: 0, gain: 0.22, mult: 2, type },
+        ]
+      : [
+          { detune: -8, gain: 0.6, mult: 1, type },
+          { detune: 8, gain: 0.6, mult: 1, type },
+        ];
+  for (const l of layers) {
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    g.gain.value = l.gain;
+    osc.type = l.type;
+    osc.detune.value = l.detune;
+    osc.frequency.setValueAtTime(from * l.mult, start);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(to * l.mult, 1), start + dur);
+    osc.connect(g).connect(filter);
+    osc.start(start);
+    osc.stop(start + dur + 0.05);
+  }
 }
 
 /** 風を切る音（ノイズの帯域を動かす） */
@@ -70,7 +125,7 @@ export function playSfx(rarity: Rarity, impactSec: number): void {
   if (c === null) return;
   const master = c.createGain();
   master.gain.value = 0.22;
-  master.connect(c.destination);
+  master.connect(bus(c));
   const t0 = c.currentTime + 0.02;
   const hit = t0 + impactSec;
 
@@ -122,7 +177,7 @@ function playVariant(kind: 'move' | 'wall', recipes: readonly SfxRecipe[], playe
   if (c !== null) {
     const master = c.createGain();
     master.gain.value = kind === 'wall' ? 0.3 : 0.22;
-    master.connect(c.destination);
+    master.connect(bus(c));
     playRecipe(c, master, recipe, c.currentTime + 0.005, playerPitch(player) * pitchJitter(Math.random));
   }
   return recipe.name;
@@ -138,13 +193,27 @@ export function playWallSfx(player: 0 | 1): string {
   return playVariant('wall', WALL_RECIPES, player);
 }
 
+/** 強さの札が、1 枚ずつ、勢いよく出てくるときの、低い「ダン！」（step が進むほど、少し高く、強く） */
+export function playThudSfx(step: number): void {
+  const c = getContext();
+  if (c === null) return;
+  const master = c.createGain();
+  master.gain.value = 0.34 + Math.min(step, 5) * 0.03;
+  master.connect(bus(c));
+  const t = c.currentTime + 0.005;
+  const base = 78 + step * 7;
+  tone(c, master, 'sine', base * 2.2, base * 0.55, t, 0.34, 1.0);
+  tone(c, master, 'triangle', base * 1.1, base * 0.5, t, 0.22, 0.5);
+  whoosh(c, master, 500, 90, t, 0.1, 0.6);
+}
+
 /** タイトルのロゴが「ドン!!」と落ちる音: 風を切る音 → 重い衝撃 → 長い和音ときらめき */
 export function playTitleSfx(): void {
   const c = getContext();
   if (c === null) return;
   const master = c.createGain();
   master.gain.value = 0.26;
-  master.connect(c.destination);
+  master.connect(bus(c));
   const t0 = c.currentTime + 0.02;
   const hit = t0 + 0.38;
   whoosh(c, master, 300, 6000, t0, 0.38, 0.8);

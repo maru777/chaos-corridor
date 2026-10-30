@@ -422,6 +422,15 @@ export class BoardView {
     }
   }
 
+  private flipped = false;
+
+  /** true なら、盤を反対側から見る（後手が、自分のコマを手前に見るため） */
+  setFlipped(flipped: boolean): void {
+    if (this.flipped === flipped) return;
+    this.flipped = flipped;
+    this.relayout();
+  }
+
   /** 画面の上・下に出ている表示の高さ（ピクセル）を返す関数。盤が、それに被らない範囲に収まるようにする */
   private insets: (() => { top: number; bottom: number }) | undefined;
 
@@ -448,9 +457,11 @@ export class BoardView {
     const shiftPx = Math.round((rig.shiftNdc * h) / 2);
     if (shiftPx !== 0) this.camera.setViewOffset(w, h, 0, shiftPx, w, h);
     else this.camera.clearViewOffset();
-    this.basePos.set(rig.pos[0], rig.pos[1], rig.pos[2]);
+    // 後手のときは、盤を反対側（180 度回した向き）から見る。先手でも後手でも、自分のコマが、画面の手前になる
+    const f = this.flipped ? -1 : 1;
+    this.basePos.set(rig.pos[0] * f, rig.pos[1], rig.pos[2] * f);
     this.camera.position.copy(this.basePos);
-    this.camera.lookAt(rig.target[0], rig.target[1], rig.target[2]);
+    this.camera.lookAt(rig.target[0] * f, rig.target[1], rig.target[2] * f);
     this.camera.updateProjectionMatrix();
   }
 
