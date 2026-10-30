@@ -136,3 +136,10 @@
 
 .dn-text { width: min(92vw, 400px); text-align: left !important; }
 .dn-text .eff-line { display: block; }
+
+/* 層の順番: 背景 < 降ってくるカード < エフェクト < 決まったカード < 技名の札 < 上に置いたカード */
+.draw-field { z-index: 1; }
+.draw-fx { z-index: 3 !important; }
+.draw-top { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.draw-name { z-index: 6; }
+.draw-parked { z-index: 7; }

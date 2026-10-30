@@ -100,6 +100,7 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   const slab = root.querySelector('.draw-name') as HTMLElement;
   field.classList.remove('punch', 'fade');
   field.replaceChildren();
+  (root.querySelector('.draw-top') as HTMLElement).replaceChildren();
   fx.replaceChildren();
   slab.replaceChildren();
   slab.classList.remove('show');
@@ -173,7 +174,8 @@ async function drawOne(root: HTMLElement, id: AbilityId, nth: number, total: num
   const inner = el('div', 'dreveal-in');
   inner.append(el('span', 'dback'), faceCard(id));
   reveal.appendChild(inner);
-  field.appendChild(reveal);
+  // 決まったカードは、エフェクト（閃光・集中線・紙吹雪）より、手前の層に置く
+  (root.querySelector('.draw-top') as HTMLElement).appendChild(reveal);
   // 決まったカードは、上に置いたカード（2 枚目のとき）と、下の技名の札の間に収めて、重ならないようにする
   const parkedBottom = nth > 1 ? fr.height * 0.09 + 172 + 12 : fr.height * 0.12;
   const slabTop = fr.height * 0.97 - 308;
@@ -255,8 +257,9 @@ export async function playDraws(ids: readonly AbilityId[], seed: number, beforeS
     bg,
     el('div', 'draw-title'),
     el('div', 'draw-field'),
-    el('div', 'draw-parked'),
     el('div', 'draw-fx'),
+    el('div', 'draw-top'),
+    el('div', 'draw-parked'),
     el('div', 'draw-name'),
     el('div', 'draw-prompt'),
     el('div', 'draw-note'),
