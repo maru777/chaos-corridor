@@ -668,7 +668,16 @@ function settle(next: GameState, prev: GameState): GameState {
     meteors = tickMeteors(meteors, turn);
     turn = otherPlayer(turn);
   }
-  return { ...next, skip, wallBlocked, sealed, meteors, turn, ply: prev.ply + 1 };
+  return { ...next, walls: revealNearGhosts(next), skip, wallBlocked, sealed, meteors, turn, ply: prev.ply + 1 };
+}
+
+/**
+ * 見えない壁は、相手のコマが、壁に接するマス（壁の周囲 1 マス）に入ると、姿を現す（そのあとは、ずっと見える）。
+ * 1 回の手で 2 歩動く Skill などでは、入る前に壁にぶつかることもある（ぶつかっても姿を現す）。
+ */
+export function revealNearGhosts(state: Pick<GameState, 'walls' | 'pawns'>): readonly Wall[] {
+  if (!state.walls.some((w) => w.ghost === true)) return state.walls;
+  return state.walls.map((w) => (w.ghost === true && wallTouchesCell(w, state.pawns[otherPlayer(w.owner)]) ? { ...w, ghost: false } : w));
 }
 
 function applyCore(state: GameState, action: Action): ApplyResult {

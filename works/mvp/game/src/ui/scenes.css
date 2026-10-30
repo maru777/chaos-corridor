@@ -164,8 +164,15 @@
 .ap-desc:empty::before { content: 'カードをタップして、効果を見る'; opacity: 0.6; }
 .ap-ok:disabled { opacity: 0.45; }
 @keyframes ap-in { 0% { opacity: 0; translate: -60px 0; } 100% { opacity: 1; translate: 0 0; } }
-.levels-opt { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 10px; background: #fff; border: 3px solid #05030f; font-weight: 800; }
-.levels-opt input { width: 22px; height: 22px; }
+.levels-opt { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 6px 16px 10px; padding: 8px 12px 8px 16px; background: #05030f; color: #fff; box-shadow: 6px 6px 0 #d4001a; transform: skewX(-8deg); cursor: pointer; }
+.lo-text { display: flex; flex-direction: column; transform: skewX(8deg); }
+.lo-text b { font-size: 20px; font-weight: 900; font-style: italic; letter-spacing: 0.14em; }
+.lo-text small { font-size: 11px; font-weight: 700; color: #ffb3bb; letter-spacing: 0.04em; }
+.levels-opt input { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 92px; height: 40px; margin: 0; background: #3a3a48; border: 3px solid #fff; cursor: pointer; transition: background 140ms; }
+.levels-opt input::after { content: 'OFF'; position: absolute; inset: 0; display: grid; place-items: center; transform: skewX(8deg); font: 900 italic 18px/1 sans-serif; letter-spacing: 0.16em; color: #aaa; }
+.levels-opt input:checked { background: #d4001a; }
+.levels-opt input:checked::after { content: 'ON'; color: #fff; }
+.levels-opt input:focus-visible { outline: 3px solid #ffe14a; outline-offset: 3px; }
 .pattack { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 4px; font-size: 12px; font-weight: 900; font-style: italic; color: #fff; background: #05030f; transform: skewX(-10deg); }
 .pattack svg { color: #ff4a5e; }
 .pattack span { transform: skewX(10deg); }

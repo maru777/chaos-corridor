@@ -119,24 +119,38 @@ describe('罠系の Skill は、手番を使わない', () => {
 describe('見えない壁（虚像の壁）', () => {
   const base = () => make(['trapGhost'], [], { pawns: [{ x: 4, y: 6 }, { x: 4, y: 2 }] });
 
+  // 見えない壁: 先手が、後手のコマ (4,2) の 1 つ先（4,3）と（4,4）の間に置く
+  const ghostAt = () => ok(base(), { type: 'ability', id: 'trapGhost', wall: { x: 4, y: 3, o: 'h' } });
+
   it('手元の壁を 1 枚使って置く。相手には見えず、動ける先に数えられる', () => {
-    const placed = ok(base(), { type: 'ability', id: 'trapGhost', wall: { x: 4, y: 2, o: 'h' } });
+    const placed = ghostAt();
     expect(placed.turn).toBe(0); // 手番は続く
-    expect(placed.walls).toEqual([{ x: 4, y: 2, o: 'h', owner: 0, ghost: true }]);
+    expect(placed.walls).toEqual([{ x: 4, y: 3, o: 'h', owner: 0, ghost: true }]);
     expect(placed.wallsLeft).toEqual([9, 10]);
-    // 相手（後手）のコマ (4,2) から見ると、下 (4,3) へ動ける（壁が見えない）
+    // 相手のコマは、まだ壁の周囲 1 マスにいないので、壁は見えないまま
     expect(legalPawnMoves({ ...placed, turn: 1 }).some((p) => p.x === 4 && p.y === 3)).toBe(true);
   });
 
-  it('ぶつかると、手番だけ使って、壁が姿を現す。コマは動かない', () => {
-    const placed = { ...ok(base(), { type: 'ability', id: 'trapGhost', wall: { x: 4, y: 2, o: 'h' } }), turn: 1 as const };
-    const bumped = ok(placed, { type: 'move', to: { x: 4, y: 3 } });
+  it('相手のコマが壁に接するマス（周囲 1 マス）に入ると、壁が姿を現す。そのあとは、ずっと見える', () => {
+    const placed = { ...ghostAt(), turn: 1 as const };
+    const after = ok(placed, { type: 'move', to: { x: 4, y: 3 } });
+    expect(after.pawns[1]).toEqual({ x: 4, y: 3 });
+    expect(after.walls[0]?.ghost).toBe(false);
+    // 姿を現したので、そこから下へは動けない
+    const mine = ok(after, { type: 'move', to: { x: 4, y: 5 } });
+    expect(legalPawnMoves(mine).some((p) => p.x === 4 && p.y === 4)).toBe(false);
+    // 持ち主のコマが近づいても、姿は変わらない（持ち主には、もともと見えている）
+    const owner = ok(base(), { type: 'ability', id: 'trapGhost', wall: { x: 4, y: 4, o: 'h' } });
+    expect(ok(owner, { type: 'move', to: { x: 4, y: 5 } }).walls[0]?.ghost).toBe(true);
+  });
+
+  it('入る前にぶつかる（2 歩動く Skill で、2 歩目が壁にふさがれる）と、手番だけ使って壁が姿を現す', () => {
+    const placed = { ...ok(make(['trapGhost'], ['nova'], { pawns: [{ x: 4, y: 6 }, { x: 4, y: 2 }] }), { type: 'ability', id: 'trapGhost', wall: { x: 4, y: 3, o: 'h' } }), turn: 1 as const };
+    const bumped = ok(placed, { type: 'ability', id: 'nova', first: { x: 4, y: 3 }, second: { x: 4, y: 4 } });
     expect(bumped.pawns[1]).toEqual({ x: 4, y: 2 });
     expect(bumped.walls[0]?.ghost).toBe(false);
+    expect(bumped.abilities[1]).toEqual(['nova']); // Skill は使ったことにならない
     expect(bumped.turn).toBe(0);
-    // 姿を現したあとは、動ける先から外れる
-    const again = ok(bumped, { type: 'move', to: { x: 4, y: 5 } });
-    expect(legalPawnMoves(again).some((p) => p.x === 4 && p.y === 3)).toBe(false);
   });
 
   it('置いた本人には、ずっと見えている。道がなくなる置き方はできない', () => {
