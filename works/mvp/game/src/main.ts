@@ -274,7 +274,6 @@ function renderHand(): void {
     if (at < 0) spent.add(i);
     else remaining.splice(at, 1);
   });
-  abilitiesEl.appendChild(div('hand-count', `残り ${handCount(state, seat)} / ${cards.length} 回`));
   // 今の盤で、実際に使える技（使える行動が 1 つでもあるもの）
   const usable = new Set<AbilityId>();
   if (state.turn === seat) for (const a of legalActions(state)) if (a.type === 'ability') usable.add(a.id);
@@ -295,7 +294,11 @@ function renderHand(): void {
     name.textContent = def.name;
     const reading = document.createElement('small');
     reading.textContent = def.reading;
-    b.append(rar, plate, name, reading);
+    // 残り回数は、カードごとに書く（1 枚は、1 局に 1 回）
+    const leftTag = document.createElement('span');
+    leftTag.className = 'acard-left';
+    leftTag.textContent = spent.has(i) ? '残り 0 回' : '残り 1 回';
+    b.append(rar, plate, name, reading, leftTag);
     // 今は使えない技（例: すでに封じている相手への電波妨害、道がなくなる隕石）は、押せなくする
     if (spent.has(i)) {
       b.disabled = true;
@@ -396,7 +399,7 @@ function useAbility(id: AbilityId): void {
     say('');
   } else {
     mode = id === 'nova' ? 'nova1' : (id as Mode);
-    say(def.text);
+    say(isWallPick(mode) ? '対象の壁を選ぶ' : '行き先のマスを選ぶ'); // 効果の説明は、カードの上に出ているので、ここでは繰り返さない
     if (isWallPick(mode) && pickCandidates(mode).length === 0) {
       mode = 'move';
       say(id === 'void' ? '消せる壁がない' : id === 'aegis' ? '鉄壁にできる自分の壁がない' : '戻せる自分の壁がない');

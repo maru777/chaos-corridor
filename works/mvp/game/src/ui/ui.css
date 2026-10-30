@@ -297,3 +297,7 @@
 .level-btn[data-level="4"] { background: #ff9ec7; }
 .level-btn[data-level="5"] { background: #ffd46a; box-shadow: 3px 3px 0 var(--line), 0 0 14px 2px rgba(255, 212, 106, 0.8); }
 .levels-note { margin: 12px 0 0; font-size: 12px; font-weight: 700; color: #333; }
+
+/* カードごとの残り回数 */
+.acard .acard-left { margin-top: 1px; padding: 0 9px; border-radius: 99px; background: var(--ink2); color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; white-space: nowrap; }
+.acard.spent .acard-left { background: #444; color: #bbb; }
